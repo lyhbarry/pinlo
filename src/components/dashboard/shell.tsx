@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useMe } from "./session-provider";
 import { Sidebar } from "./sidebar";
 import { TrialBanner } from "./trial-banner";
+import { WhatsAppSetupBanner } from "./whatsapp-setup-banner";
 
 function UpgradeToastSync({ pathname }: { pathname: string }) {
   const searchParams = useSearchParams();
@@ -36,7 +37,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <Sidebar userEmail={me?.email} orgName={me?.tenant.name} />
       <div className="flex flex-1 flex-col overflow-hidden">
         {me && (
-          <TrialBanner plan={me.plan} trialDaysLeft={me.trialDaysLeft} />
+          <>
+            <TrialBanner plan={me.plan} trialDaysLeft={me.trialDaysLeft} />
+            <WhatsAppSetupBanner whatsappPhoneNumberId={me.tenant.whatsappPhoneNumberId} />
+          </>
         )}
         <main className={pathname.startsWith("/dashboard/inbox") ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto"}>
           {pathname.startsWith("/dashboard/inbox")

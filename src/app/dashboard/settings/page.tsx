@@ -376,11 +376,83 @@ function SecurityCard({ email }: { email: string }) {
 
 // ─── WhatsApp card ────────────────────────────────────────────────────────────
 
-function WhatsAppCard({ phoneNumberId, webhookUrl }: { phoneNumberId: string | null; webhookUrl: string }) {
+declare global {
+  interface Window {
+    FB: {
+      init: (options: { appId: string; version: string; cookie: boolean; xfbml: boolean }) => void;
+      login: (
+        callback: (res: FBLoginResponse) => void,
+        options: { config_id: string; response_type: string; override_default_response_type: boolean }
+      ) => void;
+    };
+    fbAsyncInit: () => void;
+  }
+}
+
+type FBLoginResponse = {
+  status: string;
+  authResponse?: {
+    code?: string;
+    phone_number_id?: string;
+    waba_id?: string;
+  };
+};
+
+function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: string | null }) {
+  const [currentPhoneNumberId, setCurrentPhoneNumberId] = useState(initialPhoneNumberId);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [pid, setPid] = useState(phoneNumberId ?? "");
+  const [connecting, setConnecting] = useState(false);
+  const [pid, setPid] = useState(initialPhoneNumberId ?? "");
   const [token, setToken] = useState("");
+
+  const connected = !!currentPhoneNumberId;
+  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+  const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
+
+  useEffect(() => {
+    if (!appId) return;
+    window.fbAsyncInit = () => {
+      window.FB.init({ appId, cookie: true, xfbml: true, version: "v19.0" });
+    };
+    if (!document.getElementById("facebook-jssdk")) {
+      const script = document.createElement("script");
+      script.id = "facebook-jssdk";
+      script.src = "https://connect.facebook.net/en_US/sdk.js";
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+  }, [appId]);
+
+  async function handleEmbeddedSignup() {
+    setConnecting(true);
+    window.FB.login(
+      async (res) => {
+        if (res.status !== "connected" || !res.authResponse?.code || !res.authResponse?.phone_number_id) {
+          setConnecting(false);
+          if (!res.authResponse) toast.error("Connection cancelled.");
+          return;
+        }
+        const { code, phone_number_id } = res.authResponse;
+        const apiRes = await fetch("/api/settings/whatsapp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, phoneNumberId: phone_number_id }),
+        });
+        setConnecting(false);
+        if (apiRes.ok) {
+          setCurrentPhoneNumberId(phone_number_id);
+          setPid(phone_number_id);
+          toast.success("WhatsApp Business connected!");
+        } else {
+          const data = await apiRes.json().catch(() => ({}));
+          toast.error(data.error ?? "Failed to connect WhatsApp.");
+        }
+      },
+      { config_id: configId!, response_type: "code", override_default_response_type: true }
+    );
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -391,6 +463,7 @@ function WhatsAppCard({ phoneNumberId, webhookUrl }: { phoneNumberId: string | n
     });
     setSaving(false);
     if (res.ok) {
+      setCurrentPhoneNumberId(pid || null);
       toast.success("WhatsApp credentials saved.");
       setEditing(false);
       setToken("");
@@ -403,7 +476,14 @@ function WhatsAppCard({ phoneNumberId, webhookUrl }: { phoneNumberId: string | n
     <Card>
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div>
-          <CardTitle className="text-base">WhatsApp</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            WhatsApp
+            {connected && (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400">
+                Connected
+              </span>
+            )}
+          </CardTitle>
           <CardDescription>Meta WhatsApp Cloud API configuration</CardDescription>
         </div>
         {!editing && (
@@ -421,28 +501,39 @@ function WhatsAppCard({ phoneNumberId, webhookUrl }: { phoneNumberId: string | n
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="token" className="text-xs">Access Token</Label>
-              <Input id="token" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={phoneNumberId ? "Leave blank to keep existing token" : "EAAxxxxx..."} className="h-8 text-sm font-mono" />
+              <Input id="token" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={currentPhoneNumberId ? "Leave blank to keep existing token" : "EAAxxxxx..."} className="h-8 text-sm font-mono" />
             </div>
             <div className="flex gap-2 pt-1">
               <Button size="sm" onClick={handleSave} disabled={saving}>
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}Save
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setPid(phoneNumberId ?? ""); setToken(""); }}>Cancel</Button>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setPid(currentPhoneNumberId ?? ""); setToken(""); }}>Cancel</Button>
             </div>
           </div>
         ) : (
           <>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Phone Number ID</span>
-              <span className="font-medium font-mono text-xs">
-                {phoneNumberId ?? <span className="text-muted-foreground font-sans">Not configured</span>}
-              </span>
-            </div>
-            <Separator />
-            <div className="flex justify-between items-center text-sm gap-4">
-              <span className="text-muted-foreground shrink-0">Webhook URL</span>
-              <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded truncate">{webhookUrl}</span>
-            </div>
+            {!connected && appId && configId && (
+              <div className="space-y-3">
+                <Button onClick={handleEmbeddedSignup} disabled={connecting} className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white">
+                  {connecting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                  Connect WhatsApp Business
+                </Button>
+                <div className="relative flex items-center gap-2">
+                  <div className="flex-1 border-t border-border" />
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <div className="flex-1 border-t border-border" />
+                </div>
+                <button onClick={() => setEditing(true)} className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer text-center">
+                  Configure manually
+                </button>
+              </div>
+            )}
+            {connected && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Phone Number ID</span>
+                <span className="font-medium font-mono text-xs">{currentPhoneNumberId}</span>
+              </div>
+            )}
           </>
         )}
       </CardContent>
@@ -584,8 +675,6 @@ export default function SettingsPage() {
     );
   }
 
-  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`;
-
   return (
     <div>
       <div className="mb-6">
@@ -604,10 +693,7 @@ export default function SettingsPage() {
 
         <SecurityCard email={me.email} />
 
-        <WhatsAppCard
-          phoneNumberId={me.tenant.whatsappPhoneNumberId}
-          webhookUrl={webhookUrl}
-        />
+        <WhatsAppCard phoneNumberId={me.tenant.whatsappPhoneNumberId} />
 
         <QuickRepliesCard />
 

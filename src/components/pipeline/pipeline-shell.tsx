@@ -16,7 +16,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Plus, X, GripVertical, DollarSign, Loader2, Pencil, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TEMPLATES, type TemplateId } from "@/lib/templates";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -370,7 +369,7 @@ function StageColumn({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function PipelineShell({ previewTemplate }: { previewTemplate?: TemplateId }) {
+export function PipelineShell() {
   const [stages, setStages] = useState<Stage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
@@ -383,14 +382,6 @@ export function PipelineShell({ previewTemplate }: { previewTemplate?: TemplateI
   );
 
   useEffect(() => {
-    if (previewTemplate) {
-      const tpl = TEMPLATES[previewTemplate];
-      setStages(tpl.stages.map((name, order) => ({ id: name, name, order })));
-      setDeals([]);
-      setLoading(false);
-      return;
-    }
-
     Promise.all([
       fetch("/api/pipeline").then((r) => { if (!r.ok) throw new Error(); return r.json(); }),
       fetch("/api/contacts").then((r) => { if (!r.ok) return []; return r.json(); }),
@@ -402,7 +393,7 @@ export function PipelineShell({ previewTemplate }: { previewTemplate?: TemplateI
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [previewTemplate]);
+  }, []);
 
   function handleDragStart({ active }: DragStartEvent) {
     setActiveDealId(active.id as string);
@@ -434,7 +425,6 @@ export function PipelineShell({ previewTemplate }: { previewTemplate?: TemplateI
   }
 
   async function handleAddDeal(stageId: string, title: string, value: string, contactId: string) {
-    if (previewTemplate) return;
     const res = await fetch("/api/pipeline/deals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -446,13 +436,11 @@ export function PipelineShell({ previewTemplate }: { previewTemplate?: TemplateI
   }
 
   function handleDeleteDeal(id: string) {
-    if (previewTemplate) return;
     setDeals((prev) => prev.filter((d) => d.id !== id));
     fetch(`/api/pipeline/deals/${id}`, { method: "DELETE" });
   }
 
   async function handleEditDeal(id: string, patch: { title: string; value: string; contactId: string; notes: string }) {
-    if (previewTemplate) return;
     const res = await fetch(`/api/pipeline/deals/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
