@@ -1,0 +1,45 @@
+import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma/client";
+import { stripe } from "@/lib/stripe";
+
+export async function GET() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new Response("Unauthorized", { status: 401 });
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { tenant: { select: { stripeCustomerId: true, stripeSubscriptionId: true, stripeSubscriptionStatus: true } } },
+  });
+  if (!dbUser) return new Response("Unauthorized", { status: 401 });
+
+  let currentPeriodEnd: string | null = null;
+  let price: { amount: number; currency: string; interval: string } | null = null;
+
+  if (dbUser.tenant.stripeSubscriptionId) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(dbUser.tenant.stripeSubscriptionId, {
+        expand: ["items.data.price"],
+      });
+      const periodEnd = (sub as unknown as { current_period_end: number }).current_period_end;
+      currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
+
+      const item = sub.items.data[0];
+      if (item?.price) {
+        price = {
+          amount: item.price.unit_amount ?? 0,
+          currency: item.price.currency,
+          interval: item.price.recurring?.interval ?? "month",
+        };
+      }
+    } catch {
+      // subscription may have been deleted
+    }
+  }
+
+  return Response.json({
+    status: dbUser.tenant.stripeSubscriptionStatus,
+    currentPeriodEnd,
+    price,
+  });
+}

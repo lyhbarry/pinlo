@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                     String         @id @default(cuid())
+  name                   String
+  slug                   String         @unique
+  template               String?
+  contactFields          Json?
+  stripeCustomerId         String?
+  stripePriceId            String?
+  stripeSubscriptionId     String?
+  stripeSubscriptionStatus String?
+  stripeTrialEndsAt        DateTime?
+  whatsappPhoneNumberId  String?
+  whatsappAccessToken    String?
+  createdAt              DateTime       @default(now())
+
+  users          User[]
+  contacts       Contact[]
+  conversations  Conversation[]
+  pipelineStages PipelineStage[]
+  quickReplies   QuickReply[]
+  deals          Deal[]
+}
+
+model PipelineStage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  order     Int
+  color     String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deals  Deal[]
+}
+
+model Deal {
+  id        String   @id @default(cuid())
+  tenantId  String
+  contactId String?
+  stageId   String
+  title     String
+  value     Float?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  stage   PipelineStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+}
+
+model QuickReply {
+  id        String   @id @default(cuid())
+  tenantId  String
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  email     String   @unique
+  role      UserRole @default(MEMBER)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  phone     String
+  tags      String[]
+  createdAt DateTime @default(now())
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  deals         Deal[]
+
+  @@unique([tenantId, phone])
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  tenantId      String
+  contactId     String
+  status        ConversationStatus @default(OPEN)
+  lastMessageAt DateTime           @default(now())
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contact  Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages Message[]
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  direction      MessageDirection
+  body           String
+  timestamp      DateTime         @default(now())
+  status         MessageStatus    @default(SENT)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
