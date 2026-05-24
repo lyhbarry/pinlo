@@ -2,75 +2,43 @@ import { type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/session";
 import { db } from "@/lib/db";
 
-export async function POST(req: NextRequest) {
+const GRAPH = "https://graph.facebook.com/v19.0";
+
+export async function GET() {
   const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
-  if (dbUser.role !== "OWNER" && dbUser.role !== "ADMIN") {
-    return new Response("Forbidden", { status: 403 });
-  }
 
-  const { code } = await req.json();
-  if (!code) return new Response("Bad Request", { status: 400 });
-
-  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
-  if (!appId || !appSecret) {
-    return Response.json({ error: "Facebook app not configured on server." }, { status: 500 });
-  }
-
-  // 1. Exchange code for access token
-  const tokenUrl = new URL("https://graph.facebook.com/v19.0/oauth/access_token");
-  tokenUrl.searchParams.set("client_id", appId);
-  tokenUrl.searchParams.set("client_secret", appSecret);
-  tokenUrl.searchParams.set("code", code);
-
-  const tokenRes = await fetch(tokenUrl.toString());
-  if (!tokenRes.ok) {
-    const err = await tokenRes.json().catch(() => ({}));
-    console.error("[whatsapp] token exchange failed:", JSON.stringify(err));
-    return Response.json({ error: "Failed to exchange authorization code." }, { status: 502 });
-  }
-
-  const { access_token: accessToken } = await tokenRes.json() as { access_token: string };
-
-  // 2. Use debug_token to find the WABA IDs granted to this token
-  const debugUrl = new URL("https://graph.facebook.com/debug_token");
-  debugUrl.searchParams.set("input_token", accessToken);
-  debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`);
-
-  const debugRes = await fetch(debugUrl.toString());
-  const debugData = await debugRes.json() as {
-    data?: { granular_scopes?: { scope: string; target_ids?: string[] }[] };
-  };
-  console.log("[whatsapp] debug_token:", JSON.stringify(debugData));
-
-  const wabaIds: string[] =
-    debugData.data?.granular_scopes
-      ?.find((s) => s.scope === "whatsapp_business_management")
-      ?.target_ids ?? [];
-
-  if (!wabaIds.length) {
-    return Response.json({ error: "No WhatsApp Business Account found. Make sure you selected one during setup." }, { status: 400 });
-  }
-
-  // 3. Get phone numbers from the first WABA
-  const phonesRes = await fetch(
-    `https://graph.facebook.com/v19.0/${wabaIds[0]}/phone_numbers?access_token=${accessToken}`
-  );
-  const phonesData = await phonesRes.json() as { data?: { id: string }[] };
-  console.log("[whatsapp] phone_numbers:", JSON.stringify(phonesData));
-
-  const phoneNumberId = phonesData.data?.[0]?.id;
-  if (!phoneNumberId) {
-    return Response.json({ error: "No phone numbers found in your WhatsApp Business Account." }, { status: 400 });
-  }
-
-  await db
+  const { data } = await db
     .from("Tenant")
-    .update({ whatsappPhoneNumberId: phoneNumberId, whatsappAccessToken: accessToken })
-    .eq("id", dbUser.tenantId);
+    .select("whatsappPhoneNumberId, whatsappAccessToken")
+    .eq("id", dbUser.tenantId)
+    .single();
 
-  return Response.json({ phoneNumberId });
+  if (!data?.whatsappPhoneNumberId || !data.whatsappAccessToken) {
+    return Response.json({ connected: false });
+  }
+
+  // Fetch the display phone number from Meta
+  let displayPhoneNumber: string | null = null;
+  try {
+    const res = await fetch(
+      `${GRAPH}/${data.whatsappPhoneNumberId}?fields=display_phone_number,verified_name&access_token=${data.whatsappAccessToken}`
+    );
+    const json = await res.json() as { display_phone_number?: string; verified_name?: string; error?: { message: string } };
+    if (res.ok) {
+      displayPhoneNumber = json.display_phone_number ?? null;
+    } else {
+      console.error("[WA] fetch phone number:", JSON.stringify(json.error));
+    }
+  } catch (err) {
+    console.error("[WA] fetch phone number error:", err);
+  }
+
+  return Response.json({
+    connected: true,
+    phoneNumberId: data.whatsappPhoneNumberId,
+    displayPhoneNumber,
+  });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -88,6 +56,21 @@ export async function PATCH(req: NextRequest) {
       whatsappPhoneNumberId: phoneNumberId?.trim() || null,
       whatsappAccessToken: accessToken?.trim() || null,
     })
+    .eq("id", dbUser.tenantId);
+
+  return new Response("OK", { status: 200 });
+}
+
+export async function DELETE() {
+  const dbUser = await requireAuth();
+  if (!dbUser) return new Response("Unauthorized", { status: 401 });
+  if (dbUser.role !== "OWNER" && dbUser.role !== "ADMIN") {
+    return new Response("Forbidden", { status: 403 });
+  }
+
+  await db
+    .from("Tenant")
+    .update({ whatsappPhoneNumberId: null, whatsappAccessToken: null })
     .eq("id", dbUser.tenantId);
 
   return new Response("OK", { status: 200 });

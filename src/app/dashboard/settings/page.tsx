@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMe } from "@/components/dashboard/session-provider";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Pencil, Plus, Trash2, UserPlus, Crown, Shield, User, Lock } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, UserPlus, Crown, Shield, User, Lock, ChevronRight, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ─── Billing button ───────────────────────────────────────────────────────────
@@ -376,166 +377,41 @@ function SecurityCard({ email }: { email: string }) {
 
 // ─── WhatsApp card ────────────────────────────────────────────────────────────
 
-declare global {
-  interface Window {
-    FB: {
-      init: (options: { appId: string; version: string; cookie: boolean; xfbml: boolean }) => void;
-      login: (
-        callback: (res: FBLoginResponse) => void,
-        options: { config_id: string; response_type: string; override_default_response_type: boolean; scope: string }
-      ) => void;
-    };
-    fbAsyncInit: () => void;
-  }
-}
-
-type FBLoginResponse = {
-  status: string;
-  code?: string;
-  authResponse?: { code?: string; waba_id?: string };
-};
-
-function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: string | null }) {
-  const [currentPhoneNumberId, setCurrentPhoneNumberId] = useState(initialPhoneNumberId);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [pid, setPid] = useState(initialPhoneNumberId ?? "");
-  const [token, setToken] = useState("");
-  const connected = !!currentPhoneNumberId;
-  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-  const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
-
-  useEffect(() => {
-    if (!appId) return;
-    window.fbAsyncInit = () => {
-      window.FB.init({ appId, cookie: true, xfbml: true, version: "v19.0" });
-    };
-    if (!document.getElementById("facebook-jssdk")) {
-      const script = document.createElement("script");
-      script.id = "facebook-jssdk";
-      script.src = "https://connect.facebook.net/en_US/sdk.js";
-      script.async = true;
-      script.defer = true;
-      document.body.appendChild(script);
-    }
-  }, [appId]);
-
-  async function processFBResponse(res: FBLoginResponse) {
-    const code = res.code ?? res.authResponse?.code;
-    if (!code) {
-      setConnecting(false);
-      toast.error("Authorization not received. Please try again.");
-      return;
-    }
-    const apiRes = await fetch("/api/settings/whatsapp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    });
-    setConnecting(false);
-    if (apiRes.ok) {
-      const { phoneNumberId } = await apiRes.json() as { phoneNumberId: string };
-      setCurrentPhoneNumberId(phoneNumberId);
-      setPid(phoneNumberId);
-      toast.success("WhatsApp Business connected!");
-    } else {
-      const data = await apiRes.json().catch(() => ({}));
-      toast.error(data.error ?? "Failed to connect WhatsApp.");
-    }
-  }
-
-  function handleEmbeddedSignup() {
-    setConnecting(true);
-    window.FB.login(
-      (res) => { void processFBResponse(res); },
-      { config_id: configId!, response_type: "code", override_default_response_type: true, scope: "whatsapp_business_management" }
-    );
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    const res = await fetch("/api/settings/whatsapp", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumberId: pid, accessToken: token || undefined }),
-    });
-    setSaving(false);
-    if (res.ok) {
-      setCurrentPhoneNumberId(pid || null);
-      toast.success("WhatsApp credentials saved.");
-      setEditing(false);
-      setToken("");
-    } else {
-      toast.error("Failed to save credentials.");
-    }
-  }
+function WhatsAppCard({ phoneNumberId }: { phoneNumberId: string | null }) {
+  const router = useRouter();
+  const connected = !!phoneNumberId;
 
   return (
-    <Card>
+    <Card
+      className="cursor-pointer hover:bg-muted/30 transition-colors"
+      onClick={() => router.push("/dashboard/settings/whatsapp")}
+    >
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div>
           <CardTitle className="text-base flex items-center gap-2">
             WhatsApp
-            {connected && (
+            {connected ? (
               <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400">
-                Connected
+                <CheckCircle2 className="w-3 h-3" />Connected
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                Not connected
               </span>
             )}
           </CardTitle>
-          <CardDescription>Meta WhatsApp Cloud API configuration</CardDescription>
+          <CardDescription>Meta WhatsApp Cloud API</CardDescription>
         </div>
-        {!editing && (
-          <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="-mt-1">
-            <Pencil className="w-3.5 h-3.5 mr-1.5" />Edit
-          </Button>
-        )}
+        <ChevronRight className="w-4 h-4 text-muted-foreground mt-0.5" />
       </CardHeader>
-      <CardContent className="space-y-3">
-        {editing ? (
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="pid" className="text-xs">Phone Number ID</Label>
-              <Input id="pid" value={pid} onChange={(e) => setPid(e.target.value)} placeholder="1234567890" className="h-8 text-sm font-mono" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="token" className="text-xs">Access Token</Label>
-              <Input id="token" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={currentPhoneNumberId ? "Leave blank to keep existing token" : "EAAxxxxx..."} className="h-8 text-sm font-mono" />
-            </div>
-            <div className="flex gap-2 pt-1">
-              <Button size="sm" onClick={handleSave} disabled={saving}>
-                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}Save
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setPid(currentPhoneNumberId ?? ""); setToken(""); }}>Cancel</Button>
-            </div>
+      {connected && (
+        <CardContent>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Phone Number ID</span>
+            <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded">{phoneNumberId}</span>
           </div>
-        ) : (
-          <>
-            {!connected && appId && configId && (
-              <div className="space-y-3">
-                <Button onClick={handleEmbeddedSignup} disabled={connecting} className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white">
-                  {connecting && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                  Connect WhatsApp Business
-                </Button>
-                <div className="relative flex items-center gap-2">
-                  <div className="flex-1 border-t border-border" />
-                  <span className="text-xs text-muted-foreground">or</span>
-                  <div className="flex-1 border-t border-border" />
-                </div>
-                <button onClick={() => setEditing(true)} className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer text-center">
-                  Configure manually
-                </button>
-              </div>
-            )}
-            {connected && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Phone Number ID</span>
-                <span className="font-medium font-mono text-xs">{currentPhoneNumberId}</span>
-              </div>
-            )}
-          </>
-        )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   );
 }

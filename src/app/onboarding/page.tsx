@@ -4,54 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { selectTemplate } from "@/app/actions/onboarding";
-
-declare global {
-  interface Window {
-    FB: {
-      init: (options: { appId: string; version: string; cookie: boolean; xfbml: boolean }) => void;
-      login: (
-        callback: (res: FBLoginResponse) => void,
-        options: { config_id: string; response_type: string; override_default_response_type: boolean; scope: string }
-      ) => void;
-    };
-    fbAsyncInit: () => void;
-  }
-}
-
-type FBLoginResponse = {
-  status: string;
-  code?: string;
-  authResponse?: { code?: string; waba_id?: string };
-};
+import { WhatsAppConnectButton } from "@/components/whatsapp-connect-button";
 
 export default function OnboardingPage() {
-  const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const provisionRef = useRef<Promise<{ error?: string }> | null>(null);
-  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-  const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
 
   // Provision generic CRM in background immediately
   useEffect(() => {
     provisionRef.current = selectTemplate("generic_crm");
   }, []);
-
-  // Load FB SDK
-  useEffect(() => {
-    if (!appId) return;
-    window.fbAsyncInit = () => {
-      window.FB.init({ appId, cookie: true, xfbml: true, version: "v19.0" });
-    };
-    if (!document.getElementById("facebook-jssdk")) {
-      const script = document.createElement("script");
-      script.id = "facebook-jssdk";
-      script.src = "https://connect.facebook.net/en_US/sdk.js";
-      script.async = true;
-      script.defer = true;
-      document.body.appendChild(script);
-    }
-  }, [appId]);
 
   async function proceed() {
     if (provisionRef.current) {
@@ -64,35 +28,26 @@ export default function OnboardingPage() {
     window.location.href = "/dashboard";
   }
 
-  async function processFBResponse(res: FBLoginResponse) {
-    const code = res.code ?? res.authResponse?.code;
-    if (!code) {
-      setConnecting(false);
-      setError("Authorization not received from Facebook. Please try again.");
-      return;
-    }
-    const apiRes = await fetch("/api/settings/whatsapp", {
+  async function handleSuccess({ code, phoneNumberId, wabaId }: { code: string; phoneNumberId: string; wabaId: string }) {
+    setSubmitting(true);
+    setError(null);
+    const res = await fetch("/api/whatsapp/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, phoneNumberId, wabaId }),
     });
-    setConnecting(false);
-    if (apiRes.ok) {
+    setSubmitting(false);
+    if (res.ok) {
       setConnected(true);
       await proceed();
     } else {
-      const data = await apiRes.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({})) as { error?: string };
       setError(data.error ?? "Failed to connect WhatsApp. You can set it up later in Settings.");
     }
   }
 
-  function handleConnect() {
-    setError(null);
-    setConnecting(true);
-    window.FB.login(
-      (res) => { void processFBResponse(res); },
-      { config_id: configId!, response_type: "code", override_default_response_type: true, scope: "whatsapp_business_management" }
-    );
+  function handleError(message: string) {
+    setError(message);
   }
 
   return (
@@ -138,22 +93,14 @@ export default function OnboardingPage() {
               <CheckCircle className="w-8 h-8" />
               <p className="font-medium">Connected! Taking you to your dashboard…</p>
             </div>
+          ) : submitting ? (
+            <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Setting up WhatsApp…
+            </div>
           ) : (
             <div className="space-y-3">
-              {appId && configId ? (
-                <button
-                  onClick={handleConnect}
-                  disabled={connecting}
-                  className="w-full py-2.5 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {connecting && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Connect WhatsApp Business
-                </button>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  WhatsApp connection will be available in Settings once configured.
-                </p>
-              )}
+              <WhatsAppConnectButton onSuccess={handleSuccess} onError={handleError} />
               <button
                 onClick={proceed}
                 className="w-full text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer"
