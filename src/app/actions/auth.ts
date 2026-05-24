@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { db } from "@/lib/db";
 
 const SignupSchema = z.object({
@@ -34,15 +35,9 @@ function slugify(text: string): string {
     .replace(/^-|-$/g, "");
 }
 
-async function uniqueSlug(base: string): Promise<string> {
-  let slug = slugify(base);
-  let suffix = 0;
-  while (true) {
-    const candidate = suffix === 0 ? slug : `${slug}-${suffix}`;
-    const { data } = await db.from("Tenant").select("id").eq("slug", candidate).maybeSingle();
-    if (!data) return candidate;
-    suffix++;
-  }
+async function slugExists(slug: string): Promise<boolean> {
+  const { data } = await db.from("Tenant").select("id").eq("slug", slug).maybeSingle();
+  return !!data;
 }
 
 export async function signup(
@@ -61,14 +56,19 @@ export async function signup(
   }
 
   const { email, password, orgName } = validated.data;
-  const supabase = await createClient();
 
+  const slug = slugify(orgName);
+  if (await slugExists(slug)) {
+    return { errors: { orgName: ["An organisation with this name already exists. Please choose a different name."] } };
+  }
+
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error || !data.user) {
     return { message: error?.message ?? "Signup failed. Please try again." };
   }
 
-  const slug = await uniqueSlug(orgName);
+  const admin = createAdminClient();
 
   const { data: tenant, error: tenantError } = await db
     .from("Tenant")
@@ -77,12 +77,20 @@ export async function signup(
     .single();
 
   if (tenantError || !tenant) {
+    await admin.auth.admin.deleteUser(data.user.id);
     return { message: "Failed to create organization. Please try again." };
   }
 
-  await db
+  const tenantId = (tenant as { id: string }).id;
+  const { error: userError } = await db
     .from("User")
-    .insert({ id: data.user.id, email, tenantId: (tenant as { id: string }).id, role: "OWNER" });
+    .insert({ id: data.user.id, email, tenantId, role: "OWNER" });
+
+  if (userError) {
+    await admin.auth.admin.deleteUser(data.user.id);
+    await db.from("Tenant").delete().eq("id", tenantId);
+    return { message: "Failed to set up account. Please try again." };
+  }
 
   redirect("/onboarding");
 }

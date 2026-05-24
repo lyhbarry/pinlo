@@ -9,13 +9,24 @@ import { selectTemplate } from "@/app/actions/onboarding";
 
 export default function OnboardingPage() {
   const [selected, setSelected] = useState<TemplateId | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   async function handleSelect(id: TemplateId) {
     if (pending) return;
     setSelected(id);
     startTransition(async () => {
-      await selectTemplate(id);
+      const result = await selectTemplate(id);
+      if (result?.error) {
+        setError(result.error);
+        setSelected(null);
+        // If sign-out happened, redirect to signup
+        if (result.error.includes("sign up again")) {
+          window.location.href = "/signup";
+        }
+        return;
+      }
+      window.location.href = "/dashboard";
     });
   }
 
@@ -52,6 +63,12 @@ export default function OnboardingPage() {
               We'll set up your pipeline stages and quick replies based on your industry.
             </p>
           </div>
+
+          {error && (
+            <div className="mb-6 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive text-center">
+              {error}
+            </div>
+          )}
 
 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {TEMPLATE_LIST.map((template) => {
