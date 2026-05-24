@@ -470,7 +470,7 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
     setConnecting(true);
     window.FB.login(
       (res) => { void processFBResponse(res); },
-      { config_id: configId!, response_type: "code", override_default_response_type: true, scope: "business_management,whatsapp_business_management" }
+      { config_id: configId!, response_type: "code", override_default_response_type: true, scope: "whatsapp_business_management" }
     );
   }
 
