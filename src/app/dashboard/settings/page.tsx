@@ -437,17 +437,33 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
   }, []);
 
   async function processFBResponse(res: FBLoginResponse) {
-    if (!res.authResponse) {
+    if (!res.authResponse?.code) {
       setConnecting(false);
       return;
     }
     const code = res.authResponse.code;
-    const phoneNumberId = waPhoneNumberId.current ?? res.authResponse.phone_number_id;
-    if (!code || !phoneNumberId) {
+
+    // postMessage with phone_number_id often arrives after the login callback —
+    // poll up to 3 s for it before giving up
+    let phoneNumberId: string | null = waPhoneNumberId.current;
+    if (!phoneNumberId) {
+      phoneNumberId = await new Promise<string | null>((resolve) => {
+        let elapsed = 0;
+        const timer = setInterval(() => {
+          if (waPhoneNumberId.current) { clearInterval(timer); resolve(waPhoneNumberId.current); return; }
+          elapsed += 50;
+          if (elapsed >= 3000) { clearInterval(timer); resolve(null); }
+        }, 50);
+      });
+    }
+
+    if (!phoneNumberId) {
       setConnecting(false);
-      toast.error("Could not retrieve WhatsApp details. Please try again.");
+      toast.error("Could not get WhatsApp phone number. Please try again.");
       return;
     }
+
+    waPhoneNumberId.current = null;
     const apiRes = await fetch("/api/settings/whatsapp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -457,7 +473,6 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
     if (apiRes.ok) {
       setCurrentPhoneNumberId(phoneNumberId);
       setPid(phoneNumberId);
-      waPhoneNumberId.current = null;
       toast.success("WhatsApp Business connected!");
     } else {
       const data = await apiRes.json().catch(() => ({}));
