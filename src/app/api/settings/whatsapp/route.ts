@@ -9,8 +9,8 @@ export async function POST(req: NextRequest) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const { code, phoneNumberId } = await req.json();
-  if (!code || !phoneNumberId) return new Response("Bad Request", { status: 400 });
+  const { code, wabaId } = await req.json();
+  if (!code || !wabaId) return new Response("Bad Request", { status: 400 });
 
   const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Facebook app not configured on server." }, { status: 500 });
   }
 
+  // 1. Exchange code for access token
   const tokenUrl = new URL("https://graph.facebook.com/v19.0/oauth/access_token");
   tokenUrl.searchParams.set("client_id", appId);
   tokenUrl.searchParams.set("client_secret", appSecret);
@@ -32,15 +33,28 @@ export async function POST(req: NextRequest) {
 
   const { access_token: accessToken } = await tokenRes.json() as { access_token: string };
 
+  // 2. Get phone numbers from the WABA
+  const phonesRes = await fetch(
+    `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?access_token=${accessToken}`
+  );
+  if (!phonesRes.ok) {
+    const err = await phonesRes.json().catch(() => ({}));
+    console.error("[whatsapp] phone numbers fetch failed:", JSON.stringify(err));
+    return Response.json({ error: "Failed to retrieve phone numbers from WhatsApp Business Account." }, { status: 502 });
+  }
+
+  const phonesData = await phonesRes.json() as { data?: { id: string; display_phone_number: string }[] };
+  const firstPhone = phonesData.data?.[0];
+  if (!firstPhone) {
+    return Response.json({ error: "No phone numbers found in your WhatsApp Business Account." }, { status: 400 });
+  }
+
   await db
     .from("Tenant")
-    .update({
-      whatsappPhoneNumberId: phoneNumberId,
-      whatsappAccessToken: accessToken,
-    })
+    .update({ whatsappPhoneNumberId: firstPhone.id, whatsappAccessToken: accessToken })
     .eq("id", dbUser.tenantId);
 
-  return new Response("OK", { status: 200 });
+  return Response.json({ phoneNumberId: firstPhone.id });
 }
 
 export async function PATCH(req: NextRequest) {

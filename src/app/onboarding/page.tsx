@@ -19,7 +19,7 @@ declare global {
 }
 
 type FBLoginResponse = {
-  authResponse?: { code?: string; phone_number_id?: string };
+  authResponse?: { code?: string; phone_number_id?: string; waba_id?: string };
 };
 
 export default function OnboardingPage() {
@@ -27,8 +27,7 @@ export default function OnboardingPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const provisionRef = useRef<Promise<{ error?: string }> | null>(null);
-  const waPhoneNumberId = useRef<string | null>(null);
-
+  const wabaIdRef = useRef<string | null>(null);
   const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
   const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
 
@@ -37,14 +36,14 @@ export default function OnboardingPage() {
     provisionRef.current = selectTemplate("generic_crm");
   }, []);
 
-  // Meta sends phone_number_id via postMessage, not in FB.login authResponse
+  // Capture waba_id from Meta's postMessage
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
       if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
       try {
-        const data = JSON.parse(event.data as string) as { type?: string; event?: string; data?: { phone_number_id?: string } };
-        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH" && data.data?.phone_number_id) {
-          waPhoneNumberId.current = data.data.phone_number_id;
+        const data = JSON.parse(event.data as string) as { type?: string; event?: string; data?: { waba_id?: string } };
+        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH" && data.data?.waba_id) {
+          wabaIdRef.current = data.data.waba_id;
         }
       } catch {}
     }
@@ -82,35 +81,35 @@ export default function OnboardingPage() {
   async function processFBResponse(res: FBLoginResponse) {
     if (!res.authResponse?.code) {
       setConnecting(false);
+      setError("Authorization not received from Facebook. Please try again.");
       return;
     }
     const code = res.authResponse.code;
 
-    // postMessage with phone_number_id often arrives after the login callback —
-    // poll up to 3 s for it before giving up
-    let phoneNumberId: string | null = waPhoneNumberId.current;
-    if (!phoneNumberId) {
-      phoneNumberId = await new Promise<string | null>((resolve) => {
+    // waba_id comes from postMessage; poll briefly if it hasn't arrived yet
+    let wabaId = wabaIdRef.current ?? res.authResponse.waba_id ?? null;
+    if (!wabaId) {
+      wabaId = await new Promise<string | null>((resolve) => {
         let elapsed = 0;
         const timer = setInterval(() => {
-          if (waPhoneNumberId.current) { clearInterval(timer); resolve(waPhoneNumberId.current); return; }
+          if (wabaIdRef.current) { clearInterval(timer); resolve(wabaIdRef.current); return; }
           elapsed += 50;
           if (elapsed >= 3000) { clearInterval(timer); resolve(null); }
         }, 50);
       });
     }
+    wabaIdRef.current = null;
 
-    if (!phoneNumberId) {
+    if (!wabaId) {
       setConnecting(false);
-      setError("Could not get WhatsApp phone number. Please try again.");
+      setError("Could not get WhatsApp Business Account ID. Please try again.");
       return;
     }
 
-    waPhoneNumberId.current = null;
     const apiRes = await fetch("/api/settings/whatsapp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId }),
+      body: JSON.stringify({ code, wabaId }),
     });
     setConnecting(false);
     if (apiRes.ok) {
@@ -124,7 +123,7 @@ export default function OnboardingPage() {
 
   function handleConnect() {
     setError(null);
-    waPhoneNumberId.current = null;
+    wabaIdRef.current = null;
     setConnecting(true);
     window.FB.login(
       (res) => { void processFBResponse(res); },
