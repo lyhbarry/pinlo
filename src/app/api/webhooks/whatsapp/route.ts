@@ -1,6 +1,32 @@
 import { type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 
+async function verifySignature(rawBody: ArrayBuffer, signatureHeader: string | null): Promise<boolean> {
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (!appSecret) return false;
+  if (!signatureHeader?.startsWith("sha256=")) return false;
+
+  const expected = signatureHeader.slice(7);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(appSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, rawBody);
+  const computed = Array.from(new Uint8Array(mac))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  if (computed.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < computed.length; i++) {
+    diff |= computed.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 // --- Meta webhook verification ---
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -57,10 +83,13 @@ interface WhatsAppPayload {
 
 // --- Inbound message handler ---
 export async function POST(request: NextRequest) {
-  let payload: WhatsAppPayload;
+  const rawBody = await request.arrayBuffer();
+  const valid = await verifySignature(rawBody, request.headers.get("x-hub-signature-256"));
+  if (!valid) return new Response("Forbidden", { status: 403 });
 
+  let payload: WhatsAppPayload;
   try {
-    payload = await request.json();
+    payload = JSON.parse(new TextDecoder().decode(rawBody));
   } catch {
     return new Response("Bad Request", { status: 400 });
   }

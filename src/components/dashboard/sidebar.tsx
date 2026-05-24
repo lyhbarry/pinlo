@@ -6,6 +6,7 @@ import {
   MessageCircle,
   Users,
   BarChart3,
+  BarChart2,
   Settings,
   LogOut,
   Menu,
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/inbox", label: "Inbox", icon: MessageCircle },
   { href: "/dashboard/contacts", label: "Contacts", icon: Users },
   { href: "/dashboard/pipeline", label: "Pipeline", icon: BarChart3 },
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
 

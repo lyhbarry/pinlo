@@ -33,7 +33,9 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(npm run *)",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(xargs ls -la)",
+      "Bash(mkdir -p /Users/lyhbarry/Development/personal/pinlo/src/app/api/team/\\\\[id\\\\] /Users/lyhbarry/Development/personal/pinlo/src/app/api/settings/org /Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/analytics && echo \"dirs created\")"
     ],
     "additionalDirectories": [
       "/Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/inbox",
@@ -41,7 +43,8 @@
       "/Users/lyhbarry/Development/personal/pinlo/src/app/api/conversations/[id]",
       "/Users/lyhbarry/Development/personal/pinlo/src/app/api/pipeline/deals",
       "/Users/lyhbarry/Development/personal/pinlo/src/app/api/quick-replies",
-      "/Users/lyhbarry/Development/personal/pinlo/src/app/api/contacts"
+      "/Users/lyhbarry/Development/personal/pinlo/src/app/api/contacts",
+      "/Users/lyhbarry/Development/personal/pinlo/src/app/api/team"
     ]
   }
 }
