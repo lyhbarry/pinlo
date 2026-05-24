@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useMe } from "@/components/dashboard/session-provider";
 import { createClient } from "@/lib/supabase/client";
@@ -382,7 +382,7 @@ declare global {
       init: (options: { appId: string; version: string; cookie: boolean; xfbml: boolean }) => void;
       login: (
         callback: (res: FBLoginResponse) => void,
-        options: { config_id: string; response_type: string; override_default_response_type: boolean }
+        options: { config_id: string; response_type: string; override_default_response_type: boolean; scope: string }
       ) => void;
     };
     fbAsyncInit: () => void;
@@ -390,12 +390,7 @@ declare global {
 }
 
 type FBLoginResponse = {
-  status: string;
-  authResponse?: {
-    code?: string;
-    phone_number_id?: string;
-    waba_id?: string;
-  };
+  authResponse?: { code?: string; phone_number_id?: string };
 };
 
 function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: string | null }) {
@@ -405,6 +400,7 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
   const [connecting, setConnecting] = useState(false);
   const [pid, setPid] = useState(initialPhoneNumberId ?? "");
   const [token, setToken] = useState("");
+  const waPhoneNumberId = useRef<string | null>(null);
 
   const connected = !!currentPhoneNumberId;
   const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
@@ -425,22 +421,43 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
     }
   }, [appId]);
 
+  // Meta sends phone_number_id via postMessage, not in FB.login authResponse
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+      try {
+        const data = JSON.parse(event.data as string) as { type?: string; event?: string; data?: { phone_number_id?: string } };
+        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH" && data.data?.phone_number_id) {
+          waPhoneNumberId.current = data.data.phone_number_id;
+        }
+      } catch {}
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
   async function processFBResponse(res: FBLoginResponse) {
-    if (res.status !== "connected" || !res.authResponse?.code || !res.authResponse?.phone_number_id) {
+    if (!res.authResponse) {
       setConnecting(false);
-      if (!res.authResponse) toast.error("Connection cancelled.");
       return;
     }
-    const { code, phone_number_id } = res.authResponse;
+    const code = res.authResponse.code;
+    const phoneNumberId = waPhoneNumberId.current ?? res.authResponse.phone_number_id;
+    if (!code || !phoneNumberId) {
+      setConnecting(false);
+      toast.error("Could not retrieve WhatsApp details. Please try again.");
+      return;
+    }
     const apiRes = await fetch("/api/settings/whatsapp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId: phone_number_id }),
+      body: JSON.stringify({ code, phoneNumberId }),
     });
     setConnecting(false);
     if (apiRes.ok) {
-      setCurrentPhoneNumberId(phone_number_id);
-      setPid(phone_number_id);
+      setCurrentPhoneNumberId(phoneNumberId);
+      setPid(phoneNumberId);
+      waPhoneNumberId.current = null;
       toast.success("WhatsApp Business connected!");
     } else {
       const data = await apiRes.json().catch(() => ({}));
@@ -449,10 +466,11 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
   }
 
   function handleEmbeddedSignup() {
+    waPhoneNumberId.current = null;
     setConnecting(true);
     window.FB.login(
       (res) => { void processFBResponse(res); },
-      { config_id: configId!, response_type: "code", override_default_response_type: true }
+      { config_id: configId!, response_type: "code", override_default_response_type: true, scope: "business_management,whatsapp_business_management" }
     );
   }
 
@@ -685,6 +703,8 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4 max-w-2xl">
+        <WhatsAppCard phoneNumberId={me.tenant.whatsappPhoneNumberId} />
+
         <WorkspaceCard orgName={me.tenant.name} slug={me.tenant.slug} role={me.role} />
 
         <TeamCard
@@ -694,8 +714,6 @@ export default function SettingsPage() {
         />
 
         <SecurityCard email={me.email} />
-
-        <WhatsAppCard phoneNumberId={me.tenant.whatsappPhoneNumberId} />
 
         <QuickRepliesCard />
 

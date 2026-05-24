@@ -1,42 +1,123 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { LogoMark } from "@/components/logo";
-import { cn } from "@/lib/utils";
-import { TEMPLATE_LIST, type TemplateId } from "@/lib/templates";
 import { selectTemplate } from "@/app/actions/onboarding";
 
-export default function OnboardingPage() {
-  const [selected, setSelected] = useState<TemplateId | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+declare global {
+  interface Window {
+    FB: {
+      init: (options: { appId: string; version: string; cookie: boolean; xfbml: boolean }) => void;
+      login: (
+        callback: (res: FBLoginResponse) => void,
+        options: { config_id: string; response_type: string; override_default_response_type: boolean; scope: string }
+      ) => void;
+    };
+    fbAsyncInit: () => void;
+  }
+}
 
-  async function handleSelect(id: TemplateId) {
-    if (pending) return;
-    setSelected(id);
-    startTransition(async () => {
-      const result = await selectTemplate(id);
-      if (result?.error) {
-        setError(result.error);
-        setSelected(null);
-        // If sign-out happened, redirect to signup
-        if (result.error.includes("sign up again")) {
-          window.location.href = "/signup";
+type FBLoginResponse = {
+  authResponse?: { code?: string; phone_number_id?: string };
+};
+
+export default function OnboardingPage() {
+  const [connecting, setConnecting] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const provisionRef = useRef<Promise<{ error?: string }> | null>(null);
+  const waPhoneNumberId = useRef<string | null>(null);
+
+  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+  const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
+
+  // Provision generic CRM in background immediately
+  useEffect(() => {
+    provisionRef.current = selectTemplate("generic_crm");
+  }, []);
+
+  // Meta sends phone_number_id via postMessage, not in FB.login authResponse
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+      try {
+        const data = JSON.parse(event.data as string) as { type?: string; event?: string; data?: { phone_number_id?: string } };
+        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH" && data.data?.phone_number_id) {
+          waPhoneNumberId.current = data.data.phone_number_id;
         }
+      } catch {}
+    }
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  // Load FB SDK
+  useEffect(() => {
+    if (!appId) return;
+    window.fbAsyncInit = () => {
+      window.FB.init({ appId, cookie: true, xfbml: true, version: "v19.0" });
+    };
+    if (!document.getElementById("facebook-jssdk")) {
+      const script = document.createElement("script");
+      script.id = "facebook-jssdk";
+      script.src = "https://connect.facebook.net/en_US/sdk.js";
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+  }, [appId]);
+
+  async function proceed() {
+    if (provisionRef.current) {
+      const result = await provisionRef.current;
+      if (result?.error?.includes("sign up again")) {
+        window.location.href = "/signup";
         return;
       }
-      window.location.href = "/dashboard";
-    });
+    }
+    window.location.href = "/dashboard";
   }
 
-  function handleSkip() {
-    handleSelect("generic_crm");
+  async function processFBResponse(res: FBLoginResponse) {
+    if (!res.authResponse) {
+      setConnecting(false);
+      return;
+    }
+    const code = res.authResponse.code;
+    const phoneNumberId = waPhoneNumberId.current ?? res.authResponse.phone_number_id;
+    if (!code || !phoneNumberId) {
+      setConnecting(false);
+      setError("Could not retrieve WhatsApp details. Please try again.");
+      return;
+    }
+    const apiRes = await fetch("/api/settings/whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, phoneNumberId }),
+    });
+    setConnecting(false);
+    if (apiRes.ok) {
+      setConnected(true);
+      await proceed();
+    } else {
+      const data = await apiRes.json().catch(() => ({}));
+      setError(data.error ?? "Failed to connect WhatsApp. You can set it up later in Settings.");
+    }
+  }
+
+  function handleConnect() {
+    setError(null);
+    waPhoneNumberId.current = null;
+    setConnecting(true);
+    window.FB.login(
+      (res) => { void processFBResponse(res); },
+      { config_id: configId!, response_type: "code", override_default_response_type: true, scope: "business_management,whatsapp_business_management" }
+    );
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="border-b border-border">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -44,101 +125,64 @@ export default function OnboardingPage() {
             <span className="font-bold text-foreground">Pinlo</span>
           </div>
           <button
-            onClick={handleSkip}
-            disabled={pending}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            onClick={proceed}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
-            Skip
+            Skip for now
           </button>
         </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-4xl">
-          <div className="text-center mb-10">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              Choose your workspace template
-            </h1>
-            <p className="text-muted-foreground">
-              We'll set up your pipeline stages and quick replies based on your industry.
+        <div className="w-full max-w-sm text-center space-y-6">
+          <div>
+            <div className="w-16 h-16 rounded-2xl bg-[#25D366]/10 flex items-center justify-center mx-auto mb-5">
+              <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <path d="M16 2C8.268 2 2 8.268 2 16c0 2.493.655 4.832 1.8 6.857L2 30l7.352-1.776A13.93 13.93 0 0 0 16 30c7.732 0 14-6.268 14-14S23.732 2 16 2Z" fill="#25D366"/>
+                <path d="M22.5 19.5c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.27-.47-2.42-1.5-.9-.8-1.5-1.78-1.68-2.08-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51-.17 0-.37-.02-.57-.02s-.52.07-.8.37c-.27.3-1.04 1.02-1.04 2.49 0 1.47 1.07 2.9 1.22 3.1.15.2 2.1 3.2 5.1 4.48.71.31 1.27.49 1.7.63.72.23 1.37.2 1.88.12.57-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z" fill="white"/>
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Connect WhatsApp</h1>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Link your WhatsApp Business number so you can send and receive messages directly in Pinlo.
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive text-center">
+            <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
               {error}
             </div>
           )}
 
-<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {TEMPLATE_LIST.map((template) => {
-              const isSelected = selected === template.id;
-              const isLoading = isSelected && pending;
-
-              return (
+          {connected ? (
+            <div className="flex flex-col items-center gap-2 text-green-600 dark:text-green-400">
+              <CheckCircle className="w-8 h-8" />
+              <p className="font-medium">Connected! Taking you to your dashboard…</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {appId && configId ? (
                 <button
-                  key={template.id}
-                  onClick={() => handleSelect(template.id)}
-                  disabled={pending}
-                  className={cn(
-                    "relative text-left rounded-xl border-2 p-5 transition-all hover:shadow-md disabled:opacity-60 disabled:cursor-not-allowed",
-                    isSelected
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-card hover:border-primary/40"
-                  )}
+                  onClick={handleConnect}
+                  disabled={connecting}
+                  className="w-full py-2.5 rounded-lg bg-[#25D366] hover:bg-[#128C7E] text-white font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  {template.popular && (
-                    <div className="absolute -top-2.5 left-4">
-                      <span className="bg-primary text-primary-foreground text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide">
-                        Most Popular
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="absolute top-4 right-4">
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    ) : isSelected ? (
-                      <CheckCircle className="w-4 h-4 text-primary" />
-                    ) : null}
-                  </div>
-
-                  <div className="text-3xl mb-3">{template.emoji}</div>
-                  <h3 className="font-semibold text-foreground mb-1">{template.label}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{template.description}</p>
-
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Pipeline stages
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {template.stages.slice(0, 4).map((stage) => (
-                        <span key={stage} className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
-                          {stage}
-                        </span>
-                      ))}
-                      {template.stages.length > 4 && (
-                        <span className="text-xs text-muted-foreground px-1">
-                          +{template.stages.length - 4} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  {connecting && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Connect WhatsApp Business
                 </button>
-              );
-            })}
-          </div>
-
-          <p className="text-center text-sm text-muted-foreground mt-8">
-            Not sure?{" "}
-            <button
-              onClick={() => handleSelect("generic_crm")}
-              disabled={pending}
-              className="text-primary hover:underline font-medium disabled:opacity-50"
-            >
-              Start with Generic CRM
-            </button>
-          </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  WhatsApp connection will be available in Settings once configured.
+                </p>
+              )}
+              <button
+                onClick={proceed}
+                className="w-full text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer"
+              >
+                Skip — I&apos;ll set this up later
+              </button>
+            </div>
+          )}
         </div>
       </main>
     </div>
