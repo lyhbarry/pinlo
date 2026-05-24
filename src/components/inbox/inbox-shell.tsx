@@ -82,6 +82,15 @@ function InboxShellInner() {
 
   const selectedIdRef = useRef<string | null>(null);
 
+  const selectConversation = useCallback(async (id: string) => {
+    if (selected?.id === id) return;
+    setLoadingChat(true);
+    setViewedIds((prev) => new Set([...prev, id]));
+    const data = await fetch(`/api/conversations/${id}/messages`).then((r) => r.json());
+    setSelected(data);
+    setLoadingChat(false);
+  }, [selected?.id]);
+
   // Poll conversation list every 5s
   useEffect(() => {
     async function fetchConvs() {
@@ -101,8 +110,7 @@ function InboxShellInner() {
     fetchConvs();
     const id = setInterval(fetchConvs, 5000);
     return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectConversation, router]);
 
   // Poll active conversation messages every 3s
   useEffect(() => {
@@ -134,15 +142,6 @@ function InboxShellInner() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [selected?.messages]);
-
-  const selectConversation = useCallback(async (id: string) => {
-    if (selected?.id === id) return;
-    setLoadingChat(true);
-    setViewedIds((prev) => new Set([...prev, id]));
-    const data = await fetch(`/api/conversations/${id}/messages`).then((r) => r.json());
-    setSelected(data);
-    setLoadingChat(false);
-  }, [selected?.id]);
 
   async function handleToggleStatus() {
     if (!selected) return;

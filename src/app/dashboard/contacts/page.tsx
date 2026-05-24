@@ -257,7 +257,9 @@ export default function ContactsPage() {
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium text-foreground">{contact.name}</span>
                             {contact.isLocked && (
-                              <Lock className="w-3 h-3 text-amber-500 shrink-0" title="Beyond free plan limit" />
+                              <div title="Beyond free plan limit">
+                                <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+                              </div>
                             )}
                           </div>
                         </div>

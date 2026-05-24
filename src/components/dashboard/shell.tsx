@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useMe } from "./session-provider";
 import { Sidebar } from "./sidebar";
 import { TrialBanner } from "./trial-banner";
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const me = useMe();
+function UpgradeToastSync({ pathname }: { pathname: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     if (searchParams.get("upgraded") === "true") {
@@ -21,10 +19,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       const qs = params.toString();
       router.replace(pathname + (qs ? `?${qs}` : ""));
     }
-  }, [searchParams, router, pathname]);
+  }, [pathname, router, searchParams]);
+
+  return null;
+}
+
+export function DashboardShell({ children }: { children: React.ReactNode }) {
+  const me = useMe();
+  const pathname = usePathname();
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <Suspense fallback={null}>
+        <UpgradeToastSync pathname={pathname} />
+      </Suspense>
       <Sidebar userEmail={me?.email} orgName={me?.tenant.name} />
       <div className="flex flex-1 flex-col overflow-hidden">
         {me && (
