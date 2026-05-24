@@ -40,11 +40,11 @@ export async function selectTemplate(templateId: string): Promise<{ error?: stri
     if (tenantErr) return { error: tenantErr.message };
 
     for (const [order, name] of template.stages.entries()) {
-      await db.from("PipelineStage").insert({ tenantId, name, order });
+      await db.from("PipelineStage").insert({ id: crypto.randomUUID(), tenantId, name, order });
     }
 
     for (const { title, body } of template.quickReplies) {
-      await db.from("QuickReply").insert({ tenantId, title, body });
+      await db.from("QuickReply").insert({ id: crypto.randomUUID(), tenantId, title, body });
     }
   }
 

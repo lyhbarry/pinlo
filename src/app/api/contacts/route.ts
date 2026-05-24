@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
   const { data: contact, error } = await db
     .from("Contact")
     .insert({
+      id: crypto.randomUUID(),
       tenantId: dbUser.tenantId,
       name: name.trim(),
       phone: phone.trim(),

@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
   const { data: deal } = await db
     .from("Deal")
     .insert({
+      id: crypto.randomUUID(),
       tenantId: dbUser.tenantId,
       stageId,
       title: title.trim(),

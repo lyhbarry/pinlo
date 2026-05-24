@@ -107,7 +107,7 @@ export async function POST(
   const now = new Date();
   const { data: message } = await db
     .from("Message")
-    .insert({ conversationId: id, direction: "OUTBOUND", body, timestamp: now.toISOString(), status: "SENT" })
+    .insert({ id: crypto.randomUUID(), conversationId: id, direction: "OUTBOUND", body, timestamp: now.toISOString(), status: "SENT" })
     .select()
     .single();
 

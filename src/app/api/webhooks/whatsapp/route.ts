@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
         } else {
           const { data } = await db
             .from("Contact")
-            .insert({ tenantId, name, phone, tags: [] })
+            .insert({ id: crypto.randomUUID(), tenantId, name, phone, tags: [] })
             .select()
             .single();
           contact = data;
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
         } else {
           const { data: newConv } = await db
             .from("Conversation")
-            .insert({ tenantId, contactId, status: "OPEN", lastMessageAt: timestamp.toISOString() })
+            .insert({ id: crypto.randomUUID(), tenantId, contactId, status: "OPEN", lastMessageAt: timestamp.toISOString() })
             .select("id")
             .single();
           if (!newConv) continue;
@@ -180,6 +180,7 @@ export async function POST(request: NextRequest) {
 
         // Save message
         await db.from("Message").insert({
+          id: crypto.randomUUID(),
           conversationId,
           direction: "INBOUND",
           body,

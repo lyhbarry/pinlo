@@ -72,13 +72,17 @@ export async function signup(
 
   const { data: tenant, error: tenantError } = await db
     .from("Tenant")
-    .insert({ name: orgName, slug })
+    .insert({ id: crypto.randomUUID(), name: orgName, slug })
     .select("id")
     .single();
 
   if (tenantError || !tenant) {
     await admin.auth.admin.deleteUser(data.user.id);
-    return { message: "Failed to create organization. Please try again." };
+    if (tenantError?.code === "23505") {
+      return { errors: { orgName: ["An organisation with this name already exists. Please choose a different name."] } };
+    }
+    console.error("[signup] tenant insert failed:", tenantError);
+    return { message: tenantError?.message ?? "Failed to create organisation. Please try again." };
   }
 
   const tenantId = (tenant as { id: string }).id;

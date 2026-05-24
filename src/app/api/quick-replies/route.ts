@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
   const { data: reply } = await db
     .from("QuickReply")
-    .insert({ tenantId: dbUser.tenantId, title: title.trim(), body: body.trim() })
+    .insert({ id: crypto.randomUUID(), tenantId: dbUser.tenantId, title: title.trim(), body: body.trim() })
     .select()
     .single();
 
