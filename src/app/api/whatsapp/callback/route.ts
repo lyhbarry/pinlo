@@ -12,22 +12,19 @@ export async function POST(req: NextRequest) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const { code, phoneNumberId, wabaId } = await req.json() as {
-    code: string;
-    phoneNumberId: string;
-    wabaId: string;
-  };
+  const body = await req.json() as { code: string; phoneNumberId?: string; wabaId?: string };
+  const { code } = body;
+  let { phoneNumberId, wabaId } = body;
 
-  if (!code || !phoneNumberId || !wabaId) {
-    return Response.json({ error: "Missing required fields: code, phoneNumberId, wabaId" }, { status: 400 });
+  if (!code) {
+    return Response.json({ error: "Missing required field: code" }, { status: 400 });
   }
 
   const appId = process.env.FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-  if (!appId || !appSecret || !appUrl) {
-    return Response.json({ error: "Meta app not configured on server." }, { status: 500 });
+  if (!appId || !appSecret) {
+    return Response.json({ error: "Facebook app not configured on server." }, { status: 500 });
   }
 
   // 1. Exchange code for short-lived token
@@ -35,7 +32,6 @@ export async function POST(req: NextRequest) {
   tokenUrl.searchParams.set("client_id", appId);
   tokenUrl.searchParams.set("client_secret", appSecret);
   tokenUrl.searchParams.set("code", code);
-  tokenUrl.searchParams.set("redirect_uri", `${appUrl}/api/whatsapp/callback`);
 
   const tokenRes = await fetch(tokenUrl.toString());
   const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
@@ -60,6 +56,42 @@ export async function POST(req: NextRequest) {
   console.log("[WA] long-lived token exchange:", JSON.stringify({ ok: llRes.ok, hasToken: !!llData.access_token }));
 
   const accessToken = llData.access_token ?? shortLivedToken;
+
+  // 2b. If client didn't provide WABA/phone (FINISH event never fired), discover via debug_token
+  if (!wabaId || !phoneNumberId) {
+    console.log("[WA] no wabaId/phoneNumberId from client — using debug_token to discover");
+
+    const debugUrl = new URL(`${GRAPH}/debug_token`);
+    debugUrl.searchParams.set("input_token", accessToken);
+    debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`);
+    const debugRes = await fetch(debugUrl.toString());
+    const debugData = await debugRes.json() as {
+      data?: { granular_scopes?: { scope: string; target_ids?: string[] }[] };
+      error?: { message: string };
+    };
+    console.log("[WA] debug_token:", JSON.stringify(debugData));
+
+    const wabaIds = debugData.data?.granular_scopes
+      ?.find((s) => s.scope === "whatsapp_business_management")
+      ?.target_ids ?? [];
+
+    if (!wabaIds.length) {
+      return Response.json({ error: "No WhatsApp Business Account found. Make sure you selected one during setup." }, { status: 400 });
+    }
+    wabaId = wabaIds[0];
+
+    if (!phoneNumberId) {
+      const phonesRes = await fetch(`${GRAPH}/${wabaId}/phone_numbers?access_token=${accessToken}`);
+      const phonesData = await phonesRes.json() as { data?: { id: string }[]; error?: { message: string } };
+      console.log("[WA] phone_numbers:", JSON.stringify(phonesData));
+
+      const firstPhone = phonesData.data?.[0]?.id;
+      if (!firstPhone) {
+        return Response.json({ error: "No phone numbers found in your WhatsApp Business Account." }, { status: 400 });
+      }
+      phoneNumberId = firstPhone;
+    }
+  }
 
   // 3. Subscribe app to WABA
   const subWabaRes = await fetch(`${GRAPH}/${wabaId}/subscribed_apps`, {

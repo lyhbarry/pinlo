@@ -24,6 +24,7 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
   const sdkReady = useFacebookSDK();
   const [connecting, setConnecting] = useState(false);
   const codeRef = useRef<string | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
 
   useEffect(() => {
@@ -57,14 +58,16 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
 
       console.log("[WA] FINISH | phoneNumberId:", phoneNumberId, "| wabaId:", wabaId, "| hasCode:", !!code);
 
-      if (!phoneNumberId || !wabaId || !code) {
+      if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+
+      if (!code) {
         setConnecting(false);
-        onError(`Could not retrieve WhatsApp account details (phoneNumberId=${phoneNumberId}, wabaId=${wabaId}, hasCode=${!!code}). Please try again.`);
+        onError("Authorization code missing. Please try again.");
         return;
       }
 
       codeRef.current = null;
-      onSuccess({ code, phoneNumberId, wabaId });
+      onSuccess({ code, phoneNumberId: phoneNumberId ?? "", wabaId: wabaId ?? "" });
     }
 
     window.addEventListener("message", handleMessage);
@@ -99,7 +102,15 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
           return;
         }
         codeRef.current = code;
-        console.log("[WA] code stored in ref, waiting for FINISH postMessage...");
+        console.log("[WA] code stored, waiting 5s for FINISH postMessage before falling back...");
+
+        timeoutRef.current = setTimeout(() => {
+          const storedCode = codeRef.current;
+          if (!storedCode) return;
+          codeRef.current = null;
+          console.log("[WA] FINISH timeout — proceeding with code only, server will discover WABA");
+          onSuccess({ code: storedCode, phoneNumberId: "", wabaId: "" });
+        }, 5000);
       },
       loginOptions,
     );
