@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Missing required field: code" }, { status: 400 });
   }
 
-  const appId = process.env.FACEBOOK_APP_ID;
+  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
 
   if (!appId || !appSecret) {

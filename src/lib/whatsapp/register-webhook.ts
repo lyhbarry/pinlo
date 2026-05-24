@@ -7,7 +7,7 @@ export async function registerWebhook({
   wabaId: string;
   accessToken: string;
 }): Promise<void> {
-  const appId = process.env.FACEBOOK_APP_ID!;
+  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID!;
   const appSecret = process.env.FACEBOOK_APP_SECRET!;
   const appToken = `${appId}|${appSecret}`;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
