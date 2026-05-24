@@ -23,17 +23,18 @@ export async function POST(req: NextRequest) {
   const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
 
+  console.log("[WA] env | appId:", appId, "| secretLen:", appSecret?.length, "| secretStart:", appSecret?.slice(0, 4));
+
   if (!appId || !appSecret) {
     return Response.json({ error: "Facebook app not configured on server." }, { status: 500 });
   }
 
   // 1. Exchange code for short-lived token
-  const tokenUrl = new URL(`${GRAPH}/oauth/access_token`);
-  tokenUrl.searchParams.set("client_id", appId);
-  tokenUrl.searchParams.set("client_secret", appSecret);
-  tokenUrl.searchParams.set("code", code);
-
-  const tokenRes = await fetch(tokenUrl.toString());
+  const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: appId, client_secret: appSecret, code }),
+  });
   const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
   console.log("[WA] token exchange:", JSON.stringify(tokenData));
 
