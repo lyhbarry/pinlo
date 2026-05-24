@@ -425,31 +425,33 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
     }
   }, [appId]);
 
-  async function handleEmbeddedSignup() {
+  async function processFBResponse(res: FBLoginResponse) {
+    if (res.status !== "connected" || !res.authResponse?.code || !res.authResponse?.phone_number_id) {
+      setConnecting(false);
+      if (!res.authResponse) toast.error("Connection cancelled.");
+      return;
+    }
+    const { code, phone_number_id } = res.authResponse;
+    const apiRes = await fetch("/api/settings/whatsapp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, phoneNumberId: phone_number_id }),
+    });
+    setConnecting(false);
+    if (apiRes.ok) {
+      setCurrentPhoneNumberId(phone_number_id);
+      setPid(phone_number_id);
+      toast.success("WhatsApp Business connected!");
+    } else {
+      const data = await apiRes.json().catch(() => ({}));
+      toast.error(data.error ?? "Failed to connect WhatsApp.");
+    }
+  }
+
+  function handleEmbeddedSignup() {
     setConnecting(true);
     window.FB.login(
-      async (res) => {
-        if (res.status !== "connected" || !res.authResponse?.code || !res.authResponse?.phone_number_id) {
-          setConnecting(false);
-          if (!res.authResponse) toast.error("Connection cancelled.");
-          return;
-        }
-        const { code, phone_number_id } = res.authResponse;
-        const apiRes = await fetch("/api/settings/whatsapp", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code, phoneNumberId: phone_number_id }),
-        });
-        setConnecting(false);
-        if (apiRes.ok) {
-          setCurrentPhoneNumberId(phone_number_id);
-          setPid(phone_number_id);
-          toast.success("WhatsApp Business connected!");
-        } else {
-          const data = await apiRes.json().catch(() => ({}));
-          toast.error(data.error ?? "Failed to connect WhatsApp.");
-        }
-      },
+      (res) => { void processFBResponse(res); },
       { config_id: configId!, response_type: "code", override_default_response_type: true }
     );
   }
