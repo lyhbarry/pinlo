@@ -1,6 +1,5 @@
 import { type NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma/client";
-import { checkLimit } from "@/lib/plan";
+import { db } from "@/lib/db";
 
 // --- Meta webhook verification ---
 export async function GET(request: NextRequest) {
@@ -81,12 +80,15 @@ export async function POST(request: NextRequest) {
 
       if (!messages.length) continue;
 
-      // Find the tenant by WhatsApp Phone Number ID
-      const tenant = await prisma.tenant.findFirst({
-        where: { whatsappPhoneNumberId: phoneNumberId },
-      });
+      const { data: tenant } = await db
+        .from("Tenant")
+        .select("*")
+        .eq("whatsappPhoneNumberId", phoneNumberId)
+        .single();
 
       if (!tenant) continue;
+
+      const tenantId = (tenant as { id: string }).id;
 
       for (const msg of messages) {
         const contactInfo = contacts.find((c) => c.wa_id === msg.from);
@@ -96,48 +98,71 @@ export async function POST(request: NextRequest) {
         const timestamp = new Date(parseInt(msg.timestamp, 10) * 1000);
 
         // Upsert contact
-        const contact = await prisma.contact.upsert({
-          where: { tenantId_phone: { tenantId: tenant.id, phone } },
-          create: { tenantId: tenant.id, name, phone, tags: [] },
-          update: { name },
-        });
+        const { data: existingContact } = await db
+          .from("Contact")
+          .select("*")
+          .eq("tenantId", tenantId)
+          .eq("phone", phone)
+          .maybeSingle();
+
+        let contact;
+        if (existingContact) {
+          const { data } = await db
+            .from("Contact")
+            .update({ name })
+            .eq("id", (existingContact as { id: string }).id)
+            .select()
+            .single();
+          contact = data;
+        } else {
+          const { data } = await db
+            .from("Contact")
+            .insert({ tenantId, name, phone, tags: [] })
+            .select()
+            .single();
+          contact = data;
+        }
+
+        if (!contact) continue;
+
+        const contactId = (contact as { id: string }).id;
 
         // Find or create open conversation
-        let conversation = await prisma.conversation.findFirst({
-          where: {
-            tenantId: tenant.id,
-            contactId: contact.id,
-            status: "OPEN",
-          },
-        });
+        const { data: existingConv } = await db
+          .from("Conversation")
+          .select("*")
+          .eq("tenantId", tenantId)
+          .eq("contactId", contactId)
+          .eq("status", "OPEN")
+          .maybeSingle();
 
-        if (!conversation) {
-          conversation = await prisma.conversation.create({
-            data: {
-              tenantId: tenant.id,
-              contactId: contact.id,
-              status: "OPEN",
-              lastMessageAt: timestamp,
-            },
-          });
+        let conversationId: string;
+        if (existingConv) {
+          conversationId = (existingConv as { id: string }).id;
+        } else {
+          const { data: newConv } = await db
+            .from("Conversation")
+            .insert({ tenantId, contactId, status: "OPEN", lastMessageAt: timestamp.toISOString() })
+            .select("id")
+            .single();
+          if (!newConv) continue;
+          conversationId = (newConv as { id: string }).id;
         }
 
         // Save message
-        await prisma.message.create({
-          data: {
-            conversationId: conversation.id,
-            direction: "INBOUND",
-            body,
-            timestamp,
-            status: "DELIVERED",
-          },
+        await db.from("Message").insert({
+          conversationId,
+          direction: "INBOUND",
+          body,
+          timestamp: timestamp.toISOString(),
+          status: "DELIVERED",
         });
 
         // Update conversation timestamp
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: { lastMessageAt: timestamp },
-        });
+        await db
+          .from("Conversation")
+          .update({ lastMessageAt: timestamp.toISOString() })
+          .eq("id", conversationId);
       }
     }
   }

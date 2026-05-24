@@ -1,30 +1,23 @@
 import { type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
+import { requireAuth } from "@/lib/session";
+import { db } from "@/lib/db";
 import { checkLimit } from "@/lib/plan";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
-  const replies = await prisma.quickReply.findMany({
-    where: { tenantId: dbUser.tenantId },
-    orderBy: { createdAt: "asc" },
-  });
+  const { data: replies } = await db
+    .from("QuickReply")
+    .select("*")
+    .eq("tenantId", dbUser.tenantId)
+    .order("createdAt", { ascending: true });
 
-  return Response.json(replies);
+  return Response.json(replies ?? []);
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
   const { title, body } = await req.json();
@@ -38,9 +31,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const reply = await prisma.quickReply.create({
-    data: { tenantId: dbUser.tenantId, title: title.trim(), body: body.trim() },
-  });
+  const { data: reply } = await db
+    .from("QuickReply")
+    .insert({ tenantId: dbUser.tenantId, title: title.trim(), body: body.trim() })
+    .select()
+    .single();
 
   return Response.json(reply, { status: 201 });
 }

@@ -1,46 +1,49 @@
 import { type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
-import { checkLimit, getTenantPlan, getPlanLimits } from "@/lib/plan";
+import { requireAuth } from "@/lib/session";
+import { db } from "@/lib/db";
+import { checkLimit, getPlanId, getPlanLimits } from "@/lib/plan";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { id, tenantId: dbUser.tenantId },
-    include: {
-      contact: true,
-      messages: { orderBy: { timestamp: "asc" } },
-    },
-  });
+  // Derive plan from already-fetched tenant — no extra DB call
+  const plan = getPlanId(dbUser.tenant.stripeSubscriptionStatus);
+  const limits = getPlanLimits(plan);
+  const maxContacts = limits.maxContacts as number;
+
+  // Fetch conversation and (if on free plan) contact count in parallel
+  const [{ data: conversation }, countResult] = await Promise.all([
+    db
+      .from("Conversation")
+      .select("*, contact:Contact(*), messages:Message(*)")
+      .eq("id", id)
+      .eq("tenantId", dbUser.tenantId)
+      .order("timestamp", { ascending: true, referencedTable: "Message" })
+      .single(),
+    maxContacts !== Infinity
+      ? db.from("Contact").select("*", { count: "exact", head: true }).eq("tenantId", dbUser.tenantId)
+      : Promise.resolve({ count: 0 }),
+  ]);
 
   if (!conversation) return new Response("Not Found", { status: 404 });
 
-  // Compute isLocked for the contact
-  const plan = await getTenantPlan(dbUser.tenantId);
-  const limits = getPlanLimits(plan);
-  const maxContacts = limits.maxContacts as number;
   let contactIsLocked = false;
   if (maxContacts !== Infinity) {
-    const totalContacts = await prisma.contact.count({ where: { tenantId: dbUser.tenantId } });
+    const totalContacts = (countResult as { count: number | null }).count ?? 0;
     if (totalContacts > maxContacts) {
-      const allowedContacts = await prisma.contact.findMany({
-        where: { tenantId: dbUser.tenantId },
-        orderBy: { createdAt: "asc" },
-        take: maxContacts,
-        select: { id: true },
-      });
-      const allowedIds = new Set(allowedContacts.map((c) => c.id));
-      contactIsLocked = !allowedIds.has(conversation.contact.id);
+      const { data: allowed } = await db
+        .from("Contact")
+        .select("id")
+        .eq("tenantId", dbUser.tenantId)
+        .order("createdAt", { ascending: true })
+        .limit(maxContacts);
+      const allowedIds = new Set((allowed ?? []).map((c: { id: string }) => c.id));
+      contactIsLocked = !allowedIds.has((conversation.contact as { id: string }).id);
     }
   }
 
@@ -52,23 +55,24 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { id, tenantId: dbUser.tenantId },
-    include: { tenant: true, contact: true },
-  });
+  const { data: conversation } = await db
+    .from("Conversation")
+    .select("*, tenant:Tenant(*), contact:Contact(*)")
+    .eq("id", id)
+    .eq("tenantId", dbUser.tenantId)
+    .single();
   if (!conversation) return new Response("Not Found", { status: 404 });
 
   const { body } = await req.json();
   if (!body?.trim()) return new Response("Bad Request", { status: 400 });
 
-  const msgLimit = await checkLimit(dbUser.tenantId, "monthlyMessageLimit");
+  // Use plan from already-fetched tenant — no extra DB call
+  const plan = getPlanId(dbUser.tenant.stripeSubscriptionStatus);
+
+  const msgLimit = await checkLimit(dbUser.tenantId, "monthlyMessageLimit", plan);
   if (!msgLimit.allowed) {
     return Response.json(
       { error: "Monthly message limit reached. Upgrade to Pro to keep sending.", code: "MESSAGE_LIMIT_REACHED" },
@@ -76,21 +80,22 @@ export async function POST(
     );
   }
 
-  // Check if this contact is beyond the free plan contact limit
-  const plan = await getTenantPlan(dbUser.tenantId);
   const limits = getPlanLimits(plan);
   const maxContacts = limits.maxContacts as number;
   if (maxContacts !== Infinity) {
-    const totalContacts = await prisma.contact.count({ where: { tenantId: dbUser.tenantId } });
-    if (totalContacts > maxContacts) {
-      const allowedContacts = await prisma.contact.findMany({
-        where: { tenantId: dbUser.tenantId },
-        orderBy: { createdAt: "asc" },
-        take: maxContacts,
-        select: { id: true },
-      });
-      const allowedIds = new Set(allowedContacts.map((c) => c.id));
-      if (!allowedIds.has(conversation.contact.id)) {
+    const { count: totalContacts } = await db
+      .from("Contact")
+      .select("*", { count: "exact", head: true })
+      .eq("tenantId", dbUser.tenantId);
+    if ((totalContacts ?? 0) > maxContacts) {
+      const { data: allowed } = await db
+        .from("Contact")
+        .select("id")
+        .eq("tenantId", dbUser.tenantId)
+        .order("createdAt", { ascending: true })
+        .limit(maxContacts);
+      const allowedIds = new Set((allowed ?? []).map((c: { id: string }) => c.id));
+      if (!allowedIds.has((conversation.contact as { id: string }).id)) {
         return Response.json(
           { error: "This contact is beyond your free plan limit. Upgrade to Pro to message all contacts.", code: "CONTACT_LOCKED" },
           { status: 403 }
@@ -100,13 +105,20 @@ export async function POST(
   }
 
   const now = new Date();
-  const message = await prisma.message.create({
-    data: { conversationId: id, direction: "OUTBOUND", body, timestamp: now, status: "SENT" },
-  });
-  await prisma.conversation.update({ where: { id }, data: { lastMessageAt: now } });
+  const { data: message } = await db
+    .from("Message")
+    .insert({ conversationId: id, direction: "OUTBOUND", body, timestamp: now.toISOString(), status: "SENT" })
+    .select()
+    .single();
 
-  // Send via Meta WhatsApp API if configured
-  const { whatsappPhoneNumberId, whatsappAccessToken } = conversation.tenant;
+  await db
+    .from("Conversation")
+    .update({ lastMessageAt: now.toISOString() })
+    .eq("id", id);
+
+  const tenant = conversation.tenant as { whatsappPhoneNumberId: string | null; whatsappAccessToken: string | null };
+  const contact = conversation.contact as { phone: string };
+  const { whatsappPhoneNumberId, whatsappAccessToken } = tenant;
   if (whatsappPhoneNumberId && whatsappAccessToken) {
     try {
       const waRes = await fetch(`https://graph.facebook.com/v19.0/${whatsappPhoneNumberId}/messages`, {
@@ -117,7 +129,7 @@ export async function POST(
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to: conversation.contact.phone,
+          to: contact.phone,
           type: "text",
           text: { body },
         }),

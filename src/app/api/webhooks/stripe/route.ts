@@ -1,27 +1,27 @@
 import { type NextRequest } from "next/server";
-import { stripe, isSubscriptionActive } from "@/lib/stripe";
-import { prisma } from "@/lib/prisma/client";
+import { stripe } from "@/lib/stripe";
+import { db } from "@/lib/db";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type Stripe from "stripe";
 
 async function syncSubscription(tenantId: string, sub: Stripe.Subscription) {
-  const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
+  const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
 
-  await prisma.tenant.update({
-    where: { id: tenantId },
-    data: {
-      stripeSubscriptionStatus: sub.status,
-      stripeTrialEndsAt: trialEnd,
-    },
-  });
+  await db
+    .from("Tenant")
+    .update({ stripeSubscriptionStatus: sub.status, stripeTrialEndsAt: trialEnd })
+    .eq("id", tenantId);
 
-  const owner = await prisma.user.findFirst({
-    where: { tenantId, role: "OWNER" },
-    select: { id: true },
-  });
+  const { data: owner } = await db
+    .from("User")
+    .select("id")
+    .eq("tenantId", tenantId)
+    .eq("role", "OWNER")
+    .single();
+
   if (owner) {
     const admin = createAdminClient();
-    await admin.auth.admin.updateUserById(owner.id, {
+    await admin.auth.admin.updateUserById((owner as { id: string }).id, {
       user_metadata: { subscription_status: sub.status },
     });
   }
@@ -35,11 +35,7 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
+    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
   } catch {
     return new Response("Invalid signature", { status: 400 });
   }
@@ -53,19 +49,18 @@ export async function POST(req: NextRequest) {
       const subscriptionId = session.subscription as string;
       const customerId = session.customer as string;
 
-      // Fetch full subscription to get trial info
       const sub = await stripe.subscriptions.retrieve(subscriptionId);
-      const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000) : null;
+      const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
 
-      await prisma.tenant.update({
-        where: { id: tenantId },
-        data: {
+      await db
+        .from("Tenant")
+        .update({
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
           stripeSubscriptionStatus: sub.status,
           stripeTrialEndsAt: trialEnd,
-        },
-      });
+        })
+        .eq("id", tenantId);
 
       const admin = createAdminClient();
       await admin.auth.admin.updateUserById(userId, {
@@ -76,25 +71,25 @@ export async function POST(req: NextRequest) {
 
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
-      const tenant = await prisma.tenant.findFirst({
-        where: { stripeSubscriptionId: sub.id },
-        select: { id: true },
-      });
+      const { data: tenant } = await db
+        .from("Tenant")
+        .select("id")
+        .eq("stripeSubscriptionId", sub.id)
+        .single();
       if (!tenant) break;
-
-      await syncSubscription(tenant.id, sub);
+      await syncSubscription((tenant as { id: string }).id, sub);
       break;
     }
 
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
-      const tenant = await prisma.tenant.findFirst({
-        where: { stripeSubscriptionId: sub.id },
-        select: { id: true },
-      });
+      const { data: tenant } = await db
+        .from("Tenant")
+        .select("id")
+        .eq("stripeSubscriptionId", sub.id)
+        .single();
       if (!tenant) break;
-
-      await syncSubscription(tenant.id, sub);
+      await syncSubscription((tenant as { id: string }).id, sub);
       break;
     }
   }

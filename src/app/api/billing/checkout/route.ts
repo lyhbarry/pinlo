@@ -1,18 +1,10 @@
 import { type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
+import { requireAuth } from "@/lib/session";
 import { stripe } from "@/lib/stripe";
 import { PRICING } from "@/lib/config/plans";
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { tenant: true },
-  });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
   const { tenant } = dbUser;
@@ -39,7 +31,7 @@ export async function POST(req: NextRequest) {
       cancel_url: `${appUrl}/billing`,
       metadata: {
         tenantId: tenant.id,
-        userId: user.id,
+        userId: dbUser.id,
       },
     });
 

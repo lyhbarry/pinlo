@@ -1,22 +1,17 @@
-import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
+import { requireAuth } from "@/lib/session";
+import { db } from "@/lib/db";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
-  const conversations = await prisma.conversation.findMany({
-    where: { tenantId: dbUser.tenantId },
-    orderBy: { lastMessageAt: "desc" },
-    include: {
-      contact: true,
-      messages: { orderBy: { timestamp: "desc" }, take: 1 },
-    },
-  });
+  const { data: conversations } = await db
+    .from("Conversation")
+    .select("*, contact:Contact(*), messages:Message(id,body,direction,status,timestamp)")
+    .eq("tenantId", dbUser.tenantId)
+    .order("lastMessageAt", { ascending: false })
+    .order("timestamp", { ascending: false, referencedTable: "Message" })
+    .limit(1, { referencedTable: "Message" });
 
-  return Response.json(conversations);
+  return Response.json(conversations ?? []);
 }

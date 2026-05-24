@@ -196,9 +196,10 @@ function InboxShellInner() {
 
     const real: Message = await res.json();
 
-    // Refetch full conversation to get ground-truth state (avoids tmp-/real ID race with poller)
-    const fresh: ConvDetail = await fetch(`/api/conversations/${selected.id}/messages`).then((r) => r.json());
-    setSelected(fresh);
+    // Replace optimistic message with confirmed one — poller provides eventual consistency
+    setSelected((prev) =>
+      prev ? { ...prev, messages: prev.messages.filter((m) => m.id !== optimistic.id).concat(real) } : prev
+    );
 
     setConversations((prev) =>
       prev.map((c) =>

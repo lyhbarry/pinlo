@@ -31,7 +31,9 @@
       "Bash(rm -rf .git)",
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(npm run *)",
+      "Bash(npm uninstall *)"
     ],
     "additionalDirectories": [
       "/Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/inbox",

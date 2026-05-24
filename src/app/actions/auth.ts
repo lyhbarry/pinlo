@@ -2,8 +2,8 @@
 
 import { z } from "zod";
 import { redirect } from "next/navigation";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
+import { createClient } from "@/lib/supabase/server";
+import { db } from "@/lib/db";
 
 const SignupSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }).trim(),
@@ -39,8 +39,8 @@ async function uniqueSlug(base: string): Promise<string> {
   let suffix = 0;
   while (true) {
     const candidate = suffix === 0 ? slug : `${slug}-${suffix}`;
-    const existing = await prisma.tenant.findUnique({ where: { slug: candidate } });
-    if (!existing) return candidate;
+    const { data } = await db.from("Tenant").select("id").eq("slug", candidate).maybeSingle();
+    if (!data) return candidate;
     suffix++;
   }
 }
@@ -60,7 +60,7 @@ export async function signup(
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { name, email, password, orgName } = validated.data;
+  const { email, password, orgName } = validated.data;
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signUp({ email, password });
@@ -70,19 +70,19 @@ export async function signup(
 
   const slug = await uniqueSlug(orgName);
 
-  await prisma.tenant.create({
-    data: {
-      name: orgName,
-      slug,
-      users: {
-        create: {
-          id: data.user.id,
-          email,
-          role: "OWNER",
-        },
-      },
-    },
-  });
+  const { data: tenant, error: tenantError } = await db
+    .from("Tenant")
+    .insert({ name: orgName, slug })
+    .select("id")
+    .single();
+
+  if (tenantError || !tenant) {
+    return { message: "Failed to create organization. Please try again." };
+  }
+
+  await db
+    .from("User")
+    .insert({ id: data.user.id, email, tenantId: (tenant as { id: string }).id, role: "OWNER" });
 
   redirect("/onboarding");
 }

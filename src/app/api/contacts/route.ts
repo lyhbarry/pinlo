@@ -1,46 +1,43 @@
 import { type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
+import { requireAuth } from "@/lib/session";
+import { db } from "@/lib/db";
 import { checkLimit, getTenantPlan, getPlanLimits } from "@/lib/plan";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
-  const contacts = await prisma.contact.findMany({
-    where: { tenantId: dbUser.tenantId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: { select: { conversations: true } },
-      conversations: {
-        orderBy: { lastMessageAt: "desc" },
-        take: 1,
-        select: { id: true, status: true, lastMessageAt: true },
-      },
-    },
-  });
+  const { data: contacts } = await db
+    .from("Contact")
+    .select("*, conversations:Conversation(id, status, lastMessageAt)")
+    .eq("tenantId", dbUser.tenantId)
+    .order("createdAt", { ascending: false })
+    .order("lastMessageAt", { ascending: false, referencedTable: "Conversation" });
 
   const plan = await getTenantPlan(dbUser.tenantId);
   const limits = getPlanLimits(plan);
   const maxContacts = limits.maxContacts as number;
+  const all = contacts ?? [];
   const lockedCount =
-    maxContacts !== Infinity && contacts.length > maxContacts
-      ? contacts.length - maxContacts
+    maxContacts !== Infinity && all.length > maxContacts
+      ? all.length - maxContacts
       : 0;
 
-  return Response.json(contacts.map((c, i) => ({ ...c, isLocked: i < lockedCount })));
+  return Response.json(
+    all.map((c, i) => {
+      const convs = (c.conversations as unknown[]) ?? [];
+      return {
+        ...c,
+        conversations: convs.slice(0, 1),
+        _count: { conversations: convs.length },
+        isLocked: i < lockedCount,
+      };
+    })
+  );
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
-
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+  const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
 
   const { name, phone, tags } = await req.json();
@@ -56,20 +53,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  try {
-    const contact = await prisma.contact.create({
-      data: {
-        tenantId: dbUser.tenantId,
-        name: name.trim(),
-        phone: phone.trim(),
-        tags: tags ?? [],
-      },
-    });
-    return Response.json(contact, { status: 201 });
-  } catch (e: unknown) {
-    if ((e as { code?: string }).code === "P2002") {
-      return Response.json({ error: "A contact with this phone number already exists." }, { status: 409 });
-    }
-    throw e;
+  const { data: contact, error } = await db
+    .from("Contact")
+    .insert({
+      tenantId: dbUser.tenantId,
+      name: name.trim(),
+      phone: phone.trim(),
+      tags: tags ?? [],
+    })
+    .select()
+    .single();
+
+  if (error?.code === "23505") {
+    return Response.json({ error: "A contact with this phone number already exists." }, { status: 409 });
   }
+  if (error) throw error;
+
+  return Response.json(contact, { status: 201 });
 }
