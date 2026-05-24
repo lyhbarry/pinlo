@@ -19,7 +19,9 @@ declare global {
 }
 
 type FBLoginResponse = {
-  authResponse?: { code?: string; phone_number_id?: string; waba_id?: string };
+  status: string;
+  code?: string;
+  authResponse?: { code?: string; waba_id?: string };
 };
 
 export default function OnboardingPage() {
@@ -27,28 +29,12 @@ export default function OnboardingPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const provisionRef = useRef<Promise<{ error?: string }> | null>(null);
-  const wabaIdRef = useRef<string | null>(null);
   const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
   const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
 
   // Provision generic CRM in background immediately
   useEffect(() => {
     provisionRef.current = selectTemplate("generic_crm");
-  }, []);
-
-  // Capture waba_id from Meta's postMessage
-  useEffect(() => {
-    function handleMessage(event: MessageEvent) {
-      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
-      try {
-        const data = JSON.parse(event.data as string) as { type?: string; event?: string; data?: { waba_id?: string } };
-        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH" && data.data?.waba_id) {
-          wabaIdRef.current = data.data.waba_id;
-        }
-      } catch {}
-    }
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   // Load FB SDK
@@ -79,37 +65,16 @@ export default function OnboardingPage() {
   }
 
   async function processFBResponse(res: FBLoginResponse) {
-    if (!res.authResponse?.code) {
+    const code = res.code ?? res.authResponse?.code;
+    if (!code) {
       setConnecting(false);
       setError("Authorization not received from Facebook. Please try again.");
       return;
     }
-    const code = res.authResponse.code;
-
-    // waba_id comes from postMessage; poll briefly if it hasn't arrived yet
-    let wabaId = wabaIdRef.current ?? res.authResponse.waba_id ?? null;
-    if (!wabaId) {
-      wabaId = await new Promise<string | null>((resolve) => {
-        let elapsed = 0;
-        const timer = setInterval(() => {
-          if (wabaIdRef.current) { clearInterval(timer); resolve(wabaIdRef.current); return; }
-          elapsed += 50;
-          if (elapsed >= 3000) { clearInterval(timer); resolve(null); }
-        }, 50);
-      });
-    }
-    wabaIdRef.current = null;
-
-    if (!wabaId) {
-      setConnecting(false);
-      setError("Could not get WhatsApp Business Account ID. Please try again.");
-      return;
-    }
-
     const apiRes = await fetch("/api/settings/whatsapp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, wabaId }),
+      body: JSON.stringify({ code }),
     });
     setConnecting(false);
     if (apiRes.ok) {
@@ -123,7 +88,6 @@ export default function OnboardingPage() {
 
   function handleConnect() {
     setError(null);
-    wabaIdRef.current = null;
     setConnecting(true);
     window.FB.login(
       (res) => { void processFBResponse(res); },
