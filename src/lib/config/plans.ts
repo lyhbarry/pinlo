@@ -23,7 +23,7 @@ export const PLANS: Record<PlanId, { name: string } & PlanLimits> = {
     canCustomisePipeline: false,
     canViewAnalytics: false,
     canSendMessages: true,
-    monthlyMessageLimit: 100,
+    monthlyMessageLimit: 1000,
   },
   pro: {
     name: "Pro",
@@ -56,7 +56,7 @@ export const PRICING = {
 
 export const FREE_PLAN_FEATURES = [
   "50 contacts",
-  "100 messages / month",
+  "1,000 messages / month",
   "Quick replies",
   "All pipeline templates",
   "1 user",

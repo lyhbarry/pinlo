@@ -44,5 +44,6 @@ export async function selectTemplate(templateId: string): Promise<never> {
   }
 
   await supabase.auth.updateUser({ data: { onboarding_complete: true } });
+  await supabase.auth.refreshSession();
   redirect("/dashboard");
 }

@@ -35,7 +35,8 @@
       "Bash(npm run *)",
       "Bash(npm uninstall *)",
       "Bash(xargs ls -la)",
-      "Bash(mkdir -p /Users/lyhbarry/Development/personal/pinlo/src/app/api/team/\\\\[id\\\\] /Users/lyhbarry/Development/personal/pinlo/src/app/api/settings/org /Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/analytics && echo \"dirs created\")"
+      "Bash(mkdir -p /Users/lyhbarry/Development/personal/pinlo/src/app/api/team/\\\\[id\\\\] /Users/lyhbarry/Development/personal/pinlo/src/app/api/settings/org /Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/analytics && echo \"dirs created\")",
+      "Bash(npm list *)"
     ],
     "additionalDirectories": [
       "/Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/inbox",

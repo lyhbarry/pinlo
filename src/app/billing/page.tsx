@@ -27,7 +27,7 @@ function formatPrice(amount: number, currency: string) {
 
 const ALL_FEATURES = [
   { label: "Contacts", free: "50", pro: "Unlimited" },
-  { label: "Messages / month", free: "100", pro: "Unlimited" },
+  { label: "Messages / month", free: "1,000", pro: "Unlimited" },
   { label: "Team members", free: "1", pro: "Up to 5" },
   { label: "Pipeline templates", free: true, pro: true },
   { label: "Quick replies", free: true, pro: true },
