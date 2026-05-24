@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 import { cn } from "@/lib/utils";
 import { TEMPLATE_LIST, type TemplateId } from "@/lib/templates";
 import { selectTemplate } from "@/app/actions/onboarding";
@@ -28,9 +29,7 @@ export default function OnboardingPage() {
       <header className="border-b border-border">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xs">P</span>
-            </div>
+            <LogoMark size={28} />
             <span className="font-bold text-foreground">Pinlo</span>
           </div>
           <button

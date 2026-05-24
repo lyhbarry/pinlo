@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 
 export default function SetPasswordPage() {
   const router = useRouter();
@@ -73,9 +74,7 @@ export default function SetPasswordPage() {
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">P</span>
-            </div>
+            <LogoMark size={32} />
             <span className="text-xl font-bold text-foreground">Pinlo</span>
           </div>
         </div>

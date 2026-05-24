@@ -15,7 +15,18 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: { default: "Pinlo", template: "%s · Pinlo" },
-  description: "Multi-tenant WhatsApp CRM for growing teams",
+  description: "WhatsApp CRM for growing teams",
+  openGraph: {
+    title: "Pinlo",
+    description: "WhatsApp CRM for growing teams",
+    siteName: "Pinlo",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Pinlo",
+    description: "WhatsApp CRM for growing teams",
+  },
 };
 
 export default function RootLayout({

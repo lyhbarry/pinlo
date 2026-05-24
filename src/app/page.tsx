@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Users, BarChart3, Zap } from "lucide-react";
+import { LogoMark } from "@/components/logo";
 
 export default function HomePage() {
   return (
@@ -9,9 +10,7 @@ export default function HomePage() {
       <header className="border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-xs">P</span>
-            </div>
+            <LogoMark size={28} />
             <span className="font-bold text-foreground">Pinlo</span>
           </div>
           <div className="flex items-center gap-2">

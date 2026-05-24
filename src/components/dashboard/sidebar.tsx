@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { logout } from "@/app/actions/auth";
+import { LogoMark } from "@/components/logo";
 
 const NAV_ITEMS = [
   { href: "/dashboard/inbox", label: "Inbox", icon: MessageCircle },
@@ -55,9 +56,7 @@ export function Sidebar({ userEmail, orgName }: SidebarProps) {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-4 py-5 flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
-          <span className="text-primary-foreground font-bold text-sm">P</span>
-        </div>
+        <LogoMark size={32} className="shrink-0" />
         <div className="min-w-0">
           <p className="font-semibold text-foreground text-sm truncate">Pinlo</p>
           {orgName && (
