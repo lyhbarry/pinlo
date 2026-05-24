@@ -423,7 +423,8 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
   // Capture waba_id from Meta's postMessage (fires alongside FB.login callback)
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+      if (!event.origin.includes("facebook.com")) return;
+      console.log("[WA Signup] postMessage from", event.origin, event.data);
       try {
         const data = JSON.parse(event.data as string) as { type?: string; event?: string; data?: { waba_id?: string } };
         if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH" && data.data?.waba_id) {
@@ -436,6 +437,7 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
   }, []);
 
   async function processFBResponse(res: FBLoginResponse) {
+    console.log("[WA Signup] FB.login response:", JSON.stringify(res));
     if (!res.authResponse?.code) {
       setConnecting(false);
       toast.error("Authorization not received. Please try again.");
@@ -443,7 +445,7 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
     }
     const code = res.authResponse.code;
 
-    // waba_id comes from postMessage; poll briefly if it hasn't arrived yet
+    // waba_id comes from postMessage or authResponse; poll briefly if not yet arrived
     let wabaId = wabaIdRef.current ?? res.authResponse.waba_id ?? null;
     if (!wabaId) {
       wabaId = await new Promise<string | null>((resolve) => {
@@ -456,6 +458,7 @@ function WhatsAppCard({ phoneNumberId: initialPhoneNumberId }: { phoneNumberId: 
       });
     }
     wabaIdRef.current = null;
+    console.log("[WA Signup] wabaId resolved:", wabaId);
 
     if (!wabaId) {
       setConnecting(false);
