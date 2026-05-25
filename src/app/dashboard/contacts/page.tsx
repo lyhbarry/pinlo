@@ -213,7 +213,7 @@ export default function ContactsPage() {
               {search ? "No contacts match your search" : "No contacts yet"}
             </p>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {search ? "Try a different search" : "Add one manually or they'll appear when messages arrive"}
+              {search ? "Try a different search" : "Contacts are created automatically when a customer messages your WhatsApp number"}
             </p>
           </div>
         </div>

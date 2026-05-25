@@ -9,10 +9,8 @@ import {
   BarChart2,
   Settings,
   LogOut,
-  Menu,
-  X,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -35,7 +33,6 @@ interface SidebarProps {
 
 export function Sidebar({ userEmail, orgName }: SidebarProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -76,7 +73,6 @@ export function Sidebar({ userEmail, orgName }: SidebarProps) {
             <Link
               key={href}
               href={href}
-              onClick={() => setMobileOpen(false)}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                 active
@@ -124,36 +120,8 @@ export function Sidebar({ userEmail, orgName }: SidebarProps) {
   );
 
   return (
-    <>
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col w-56 xl:w-64 border-r border-sidebar-border bg-sidebar shrink-0 h-screen sticky top-0">
-        <NavContent />
-      </aside>
-
-      {/* Mobile toggle */}
-      <div className="lg:hidden fixed top-3 left-3 z-50">
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 bg-background"
-          onClick={() => setMobileOpen((o) => !o)}
-        >
-          {mobileOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-        </Button>
-      </div>
-
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <>
-          <div
-            className="lg:hidden fixed inset-0 bg-black/40 z-40"
-            onClick={() => setMobileOpen(false)}
-          />
-          <aside className="lg:hidden fixed left-0 top-0 bottom-0 w-64 z-50 bg-sidebar border-r border-sidebar-border flex flex-col">
-            <NavContent />
-          </aside>
-        </>
-      )}
-    </>
+    <aside className="hidden lg:flex flex-col w-56 xl:w-64 border-r border-sidebar-border bg-sidebar shrink-0 h-screen sticky top-0">
+      <NavContent />
+    </aside>
   );
 }

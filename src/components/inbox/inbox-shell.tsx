@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Search, Circle, Send, CheckCheck, Phone, Tag, MessageCircle, Loader2, Zap, CheckCheck as Done, Lock,
+  Search, Circle, Send, CheckCheck, Phone, Tag, MessageCircle, Loader2, Zap, CheckCheck as Done, Lock, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,17 +30,21 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d`;
 }
 
+const userTz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined;
+
 function timeLabel(iso: string) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZone: userTz });
 }
 
 function dateDivider(iso: string) {
+  const localDay = (d: Date) =>
+    d.toLocaleDateString("en-CA", { timeZone: userTz }); // YYYY-MM-DD — stable for comparison
   const d = new Date(iso);
   const today = new Date();
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+  if (localDay(d) === localDay(today)) return "Today";
+  if (localDay(d) === localDay(yesterday)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: userTz });
 }
 
 const AVATAR_COLORS = [
@@ -63,6 +67,7 @@ function InboxShellInner() {
   const [selected, setSelected] = useState<ConvDetail | null>(null);
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [mobileShowChat, setMobileShowChat] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [body, setBody] = useState("");
@@ -83,6 +88,7 @@ function InboxShellInner() {
   const selectedIdRef = useRef<string | null>(null);
 
   const selectConversation = useCallback(async (id: string) => {
+    setMobileShowChat(true);
     if (selected?.id === id) return;
     setLoadingChat(true);
     setViewedIds((prev) => new Set([...prev, id]));
@@ -111,6 +117,11 @@ function InboxShellInner() {
     const id = setInterval(fetchConvs, 5000);
     return () => clearInterval(id);
   }, [selectConversation, router]);
+
+  // Notify bottom nav to hide/show when entering/leaving a conversation on mobile
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("mobile-chat-change", { detail: { inChat: mobileShowChat } }));
+  }, [mobileShowChat]);
 
   // Poll active conversation messages every 3s
   useEffect(() => {
@@ -196,10 +207,13 @@ function InboxShellInner() {
 
     const real: Message = await res.json();
 
-    // Replace optimistic message with confirmed one — poller provides eventual consistency
-    setSelected((prev) =>
-      prev ? { ...prev, messages: prev.messages.filter((m) => m.id !== optimistic.id).concat(real) } : prev
-    );
+    // Replace optimistic with real; guard against poller having already inserted it
+    setSelected((prev) => {
+      if (!prev) return prev;
+      const withoutOptimistic = prev.messages.filter((m) => m.id !== optimistic.id);
+      const alreadyPresent = withoutOptimistic.some((m) => m.id === real.id);
+      return { ...prev, messages: alreadyPresent ? withoutOptimistic : [...withoutOptimistic, real] };
+    });
 
     setConversations((prev) =>
       prev.map((c) =>
@@ -230,7 +244,11 @@ function InboxShellInner() {
     <div className="flex h-full">
 
       {/* ── Left: conversation list ── */}
-      <div className="w-80 xl:w-96 shrink-0 flex flex-col border-r border-border overflow-hidden">
+      <div className={cn(
+        "flex-col border-r border-border overflow-hidden",
+        "md:flex md:w-80 md:shrink-0 xl:w-96",
+        mobileShowChat ? "hidden" : "flex w-full",
+      )}>
 
         {/* Header */}
         <div className="px-4 pt-4 pb-3 space-y-3 shrink-0">
@@ -268,7 +286,7 @@ function InboxShellInner() {
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto pb-16 lg:pb-0">
           {loadingConvs ? (
             <div className="space-y-px">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -282,7 +300,16 @@ function InboxShellInner() {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center mt-12 px-4">No conversations found</p>
+            <div className="flex flex-col items-center text-center mt-12 px-6 gap-2">
+              <p className="text-sm font-medium text-foreground">
+                {search || filter !== "all" ? "No conversations match" : "No conversations yet"}
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {search || filter !== "all"
+                  ? "Try clearing your search or filter"
+                  : "Conversations will appear here once your customers message your WhatsApp number"}
+              </p>
+            </div>
           ) : (
             filtered.map((conv) => (
               <button key={conv.id} onClick={() => selectConversation(conv.id)}
@@ -320,7 +347,11 @@ function InboxShellInner() {
       </div>
 
       {/* ── Right: chat ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={cn(
+        "flex-1 flex-col overflow-hidden",
+        "md:flex",
+        mobileShowChat ? "flex" : "hidden",
+      )}>
         {!selected && !loadingChat && (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
             <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
@@ -334,17 +365,30 @@ function InboxShellInner() {
         )}
 
         {loadingChat && (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          <div className="flex flex-col h-full">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0 md:hidden">
+              <button onClick={() => setMobileShowChat(false)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex flex-1 items-center justify-center">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
           </div>
         )}
 
         {selected && !loadingChat && (
           <>
             {/* Chat header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-              <div className="flex items-center gap-3">
-                <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold", avatarColor(selected.contact.name))}>
+            <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border shrink-0">
+              <div className="flex items-center gap-2 md:gap-3">
+                <button
+                  onClick={() => setMobileShowChat(false)}
+                  className="md:hidden p-1.5 rounded-lg hover:bg-muted transition-colors shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0", avatarColor(selected.contact.name))}>
                   {initials(selected.contact.name)}
                 </div>
                 <div>

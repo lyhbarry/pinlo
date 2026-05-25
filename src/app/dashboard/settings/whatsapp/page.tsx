@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useRefreshMe } from "@/components/dashboard/session-provider";
 import { CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -17,6 +18,7 @@ type SelectionState = { options: PhoneOption[]; accessToken: string };
 
 export default function WhatsAppSettingsPage() {
   const router = useRouter();
+  const refreshMe = useRefreshMe();
   const [status, setStatus] = useState<Status | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -57,6 +59,7 @@ export default function WhatsAppSettingsPage() {
     setSubmitting(false);
     toast.success("WhatsApp Business connected!");
     setStatus({ connected: true, phoneNumberId: data.phoneNumberId!, displayPhoneNumber: null });
+    await refreshMe();
     fetch("/api/settings/whatsapp")
       .then((r) => r.json())
       .then((d) => setStatus(d as Status));
@@ -86,6 +89,7 @@ export default function WhatsAppSettingsPage() {
     setDisconnecting(false);
     if (res.ok) {
       setStatus({ connected: false });
+      await refreshMe();
       toast.success("WhatsApp disconnected.");
     } else {
       toast.error("Failed to disconnect.");

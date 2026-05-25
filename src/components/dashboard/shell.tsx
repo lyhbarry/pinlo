@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { useMe } from "./session-provider";
 import { Sidebar } from "./sidebar";
+import { BottomNav } from "./bottom-nav";
 import { TrialBanner } from "./trial-banner";
 import { WhatsAppSetupBanner } from "./whatsapp-setup-banner";
 
@@ -45,9 +46,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <main className={pathname.startsWith("/dashboard/inbox") ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto"}>
           {pathname.startsWith("/dashboard/inbox")
             ? children
-            : <div className="p-6 lg:p-8">{children}</div>}
+            : <div className="p-6 pb-24 lg:p-8">{children}</div>}
         </main>
       </div>
+      <BottomNav />
     </div>
   );
 }
