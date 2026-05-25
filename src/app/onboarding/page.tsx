@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { selectTemplate } from "@/app/actions/onboarding";
-import { WhatsAppConnectButton } from "@/components/whatsapp-connect-button";
+import { WhatsAppConnectButton, type WASuccessData } from "@/components/whatsapp-connect-button";
 
 export default function OnboardingPage() {
   const [connected, setConnected] = useState(false);
@@ -28,13 +28,13 @@ export default function OnboardingPage() {
     window.location.href = "/dashboard";
   }
 
-  async function handleSuccess({ code, phoneNumberId, wabaId }: { code: string; phoneNumberId: string; wabaId: string }) {
+  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: WASuccessData) {
     setSubmitting(true);
     setError(null);
     const res = await fetch("/api/whatsapp/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId, wabaId }),
+      body: JSON.stringify({ code, phoneNumberId, wabaId, redirectUri }),
     });
     setSubmitting(false);
     if (res.ok) {

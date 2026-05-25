@@ -12,8 +12,13 @@ export async function POST(req: NextRequest) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const body = await req.json() as { code: string; phoneNumberId?: string; wabaId?: string };
-  const { code } = body;
+  const body = await req.json() as {
+    code: string;
+    phoneNumberId?: string;
+    wabaId?: string;
+    redirectUri?: string;
+  };
+  const { code, redirectUri = "" } = body;
   let { phoneNumberId, wabaId } = body;
 
   if (!code) {
@@ -30,15 +35,15 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Exchange code for short-lived token
-  console.log("[WA] exchanging code, client_id:", appId);
+  // redirect_uri must exactly match the XD Arbiter URL the FB SDK used in the popup
+  console.log("[WA] exchanging code | redirectUri:", redirectUri.slice(0, 80));
+  const tokenBody: Record<string, string> = { client_id: appId, client_secret: appSecret, code };
+  if (redirectUri) tokenBody.redirect_uri = redirectUri;
+
   const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: appId,
-      client_secret: appSecret,
-      code,
-    }),
+    body: new URLSearchParams(tokenBody),
   });
   const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
   console.log("[WA] token exchange:", JSON.stringify(tokenData));
@@ -51,26 +56,25 @@ export async function POST(req: NextRequest) {
   const shortLivedToken = tokenData.access_token;
 
   // 2. Exchange short-lived token for long-lived token (60 days)
-  const llUrl = new URL(`${GRAPH}/oauth/access_token`);
-  llUrl.searchParams.set("grant_type", "fb_exchange_token");
-  llUrl.searchParams.set("client_id", appId);
-  llUrl.searchParams.set("client_secret", appSecret);
-  llUrl.searchParams.set("fb_exchange_token", shortLivedToken);
-
-  const llRes = await fetch(llUrl.toString());
+  const llRes = await fetch(`${GRAPH}/oauth/access_token?` + new URLSearchParams({
+    grant_type: "fb_exchange_token",
+    client_id: appId,
+    client_secret: appSecret,
+    fb_exchange_token: shortLivedToken,
+  }));
   const llData = await llRes.json() as { access_token?: string; error?: { message: string } };
-  console.log("[WA] long-lived token exchange:", JSON.stringify({ ok: llRes.ok, hasToken: !!llData.access_token }));
+  console.log("[WA] long-lived token:", JSON.stringify({ ok: llRes.ok, hasToken: !!llData.access_token }));
 
   const accessToken = llData.access_token ?? shortLivedToken;
 
-  // 2b. If client didn't provide WABA/phone (FINISH event never fired), discover via debug_token
+  // 3. Discover WABA and phone number if not provided by client
   if (!wabaId || !phoneNumberId) {
-    console.log("[WA] no wabaId/phoneNumberId from client — using debug_token to discover");
+    console.log("[WA] discovering WABA via debug_token");
 
-    const debugUrl = new URL(`${GRAPH}/debug_token`);
-    debugUrl.searchParams.set("input_token", accessToken);
-    debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`);
-    const debugRes = await fetch(debugUrl.toString());
+    const debugRes = await fetch(`${GRAPH}/debug_token?` + new URLSearchParams({
+      input_token: accessToken,
+      access_token: `${appId}|${appSecret}`,
+    }));
     const debugData = await debugRes.json() as {
       data?: { granular_scopes?: { scope: string; target_ids?: string[] }[] };
       error?: { message: string };
@@ -90,7 +94,6 @@ export async function POST(req: NextRequest) {
       const phonesRes = await fetch(`${GRAPH}/${wabaId}/phone_numbers?access_token=${accessToken}`);
       const phonesData = await phonesRes.json() as { data?: { id: string }[]; error?: { message: string } };
       console.log("[WA] phone_numbers:", JSON.stringify(phonesData));
-
       const firstPhone = phonesData.data?.[0]?.id;
       if (!firstPhone) {
         return Response.json({ error: "No phone numbers found in your WhatsApp Business Account." }, { status: 400 });
@@ -99,44 +102,36 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 3. Subscribe app to WABA
-  const subWabaRes = await fetch(`${GRAPH}/${wabaId}/subscribed_apps`, {
+  // 4. Subscribe app to WABA
+  const subRes = await fetch(`${GRAPH}/${wabaId}/subscribed_apps`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const subWabaData = await subWabaRes.json();
-  console.log("[WA] subscribed_apps:", JSON.stringify(subWabaData));
+  console.log("[WA] subscribed_apps:", JSON.stringify(await subRes.json()));
 
-  // 4. Register the phone number
+  // 5. Register the phone number
   const registerRes = await fetch(`${GRAPH}/${phoneNumberId}/register`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", pin: "000000" }),
   });
   const registerData = await registerRes.json() as { error?: { message: string } };
   console.log("[WA] register phone:", JSON.stringify(registerData));
-
   if (!registerRes.ok && registerData.error) {
     return Response.json({ error: registerData.error.message }, { status: 502 });
   }
 
-  // 5. Register webhook
+  // 6. Register webhook
   try {
     await registerWebhook({ wabaId, accessToken });
   } catch (err) {
     console.error("[WA] registerWebhook failed:", err);
   }
 
-  // 6. Persist to DB
+  // 7. Persist to DB
   await db
     .from("Tenant")
-    .update({
-      whatsappPhoneNumberId: phoneNumberId,
-      whatsappAccessToken: accessToken,
-    })
+    .update({ whatsappPhoneNumberId: phoneNumberId, whatsappAccessToken: accessToken })
     .eq("id", dbUser.tenantId);
 
   return Response.json({ phoneNumberId, wabaId });

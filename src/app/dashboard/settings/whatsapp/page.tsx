@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { WhatsAppConnectButton } from "@/components/whatsapp-connect-button";
+import { WhatsAppConnectButton, type WASuccessData } from "@/components/whatsapp-connect-button";
 
 type Status =
   | { connected: false }
@@ -29,12 +29,12 @@ export default function WhatsAppSettingsPage() {
       .catch(() => setStatus({ connected: false }));
   }, []);
 
-  async function handleSuccess({ code, phoneNumberId, wabaId }: { code: string; phoneNumberId: string; wabaId: string }) {
+  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: WASuccessData) {
     setSubmitting(true);
     const res = await fetch("/api/whatsapp/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId, wabaId }),
+      body: JSON.stringify({ code, phoneNumberId, wabaId, redirectUri }),
     });
     setSubmitting(false);
 
@@ -114,7 +114,7 @@ function StateNotConnected({
   onError,
 }: {
   submitting: boolean;
-  onSuccess: (data: { code: string; phoneNumberId: string; wabaId: string }) => void;
+  onSuccess: (data: WASuccessData) => void;
   onError: (error: string) => void;
 }) {
   return (
