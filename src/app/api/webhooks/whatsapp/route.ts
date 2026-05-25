@@ -84,8 +84,13 @@ interface WhatsAppPayload {
 // --- Inbound message handler ---
 export async function POST(request: NextRequest) {
   const rawBody = await request.arrayBuffer();
-  const valid = await verifySignature(rawBody, request.headers.get("x-hub-signature-256"));
-  if (!valid) return new Response("Forbidden", { status: 403 });
+  const sig = request.headers.get("x-hub-signature-256");
+  console.log("[WH] POST hit | bodyLen:", rawBody.byteLength, "| hasSig:", !!sig);
+  const valid = await verifySignature(rawBody, sig);
+  if (!valid) {
+    console.error("[WH] signature invalid | FACEBOOK_APP_SECRET set:", !!process.env.FACEBOOK_APP_SECRET);
+    return new Response("Forbidden", { status: 403 });
+  }
 
   let payload: WhatsAppPayload;
   try {
@@ -94,6 +99,7 @@ export async function POST(request: NextRequest) {
     return new Response("Bad Request", { status: 400 });
   }
 
+  console.log("[WH] payload.object:", payload.object);
   if (payload.object !== "whatsapp_business_account") {
     return new Response("OK", { status: 200 });
   }
@@ -109,13 +115,20 @@ export async function POST(request: NextRequest) {
 
       if (!messages.length) continue;
 
-      const { data: tenant } = await db
+      const { data: tenant, error: tenantErr } = await db
         .from("Tenant")
         .select("*")
         .eq("whatsappPhoneNumberId", phoneNumberId)
-        .single();
+        .maybeSingle();
 
-      if (!tenant) continue;
+      if (tenantErr) {
+        console.error("[WH] tenant lookup error for phoneNumberId:", phoneNumberId, tenantErr.message);
+        continue;
+      }
+      if (!tenant) {
+        console.warn("[WH] no tenant found for phoneNumberId:", phoneNumberId);
+        continue;
+      }
 
       const tenantId = (tenant as { id: string }).id;
 

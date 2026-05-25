@@ -141,21 +141,14 @@ export async function POST(req: NextRequest) {
     phoneNumberId = options[0].phoneNumberId;
   }
 
-  // 4. Subscribe app to WABA
-  const subRes = await fetch(`${GRAPH}/${wabaId}/subscribed_apps`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  console.log("[WA] subscribed_apps:", JSON.stringify(await subRes.json()));
-
-  // 5. Register webhook
-  try {
-    await registerWebhook({ wabaId, accessToken });
-  } catch (err) {
-    console.error("[WA] registerWebhook failed:", err);
+  // 4. Register webhook (includes WABA subscription + app webhook registration)
+  const webhookResult = await registerWebhook({ wabaId, accessToken });
+  if (!webhookResult.ok) {
+    console.error("[WA] registerWebhook failed:", webhookResult.error);
+    return Response.json({ error: `Webhook registration failed: ${webhookResult.error}` }, { status: 502 });
   }
 
-  // 6. Persist to DB
+  // 5. Persist to DB
   await db
     .from("Tenant")
     .update({ whatsappPhoneNumberId: phoneNumberId, whatsappAccessToken: accessToken })
