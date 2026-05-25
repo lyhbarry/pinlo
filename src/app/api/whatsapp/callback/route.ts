@@ -32,12 +32,14 @@ export async function POST(req: NextRequest) {
 
   // 1. Exchange code for short-lived token
   console.log("[WA] exchanging code (no redirect_uri), client_id:", appId);
-  const tokenUrl = new URL(`${GRAPH}/oauth/access_token`);
-  tokenUrl.searchParams.set("client_id", appId);
-  tokenUrl.searchParams.set("client_secret", appSecret);
-  tokenUrl.searchParams.set("code", code);
-  const tokenRes = await fetch(tokenUrl.toString(), {
-    headers: { Accept: "application/json" },
+  const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
+      code,
+    }),
   });
   const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
   console.log("[WA] token exchange:", JSON.stringify(tokenData));
