@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFacebookSDK, type FBLoginResponse } from "@/components/facebook-sdk";
 
-type SuccessData = { code: string; phoneNumberId: string; wabaId: string };
+type SuccessData = { code: string; phoneNumberId: string; wabaId: string; redirectUri: string };
 
 type Props = {
   onSuccess: (data: SuccessData) => void;
@@ -24,6 +24,7 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
   const sdkReady = useFacebookSDK();
   const [connecting, setConnecting] = useState(false);
   const codeRef = useRef<string | null>(null);
+  const redirectUriRef = useRef<string>("");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
 
@@ -67,7 +68,7 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
       }
 
       codeRef.current = null;
-      onSuccess({ code, phoneNumberId: phoneNumberId ?? "", wabaId: wabaId ?? "" });
+      onSuccess({ code, phoneNumberId: phoneNumberId ?? "", wabaId: wabaId ?? "", redirectUri: redirectUriRef.current });
     }
 
     window.addEventListener("message", handleMessage);
@@ -83,13 +84,17 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
     codeRef.current = null;
     setConnecting(true);
 
+    const redirectUri = `${window.location.origin}/api/whatsapp/callback`;
+    redirectUriRef.current = redirectUri;
     const loginOptions = {
       config_id: configId,
       response_type: "code",
       override_default_response_type: true,
+      redirect_uri: redirectUri,
       extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
     };
     console.log("[WA] calling FB.login with:", JSON.stringify(loginOptions));
+    console.log("[WA] redirect_uri for login:", redirectUri);
 
     window.FB.login(
       (res: FBLoginResponse) => {
@@ -109,7 +114,7 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
           if (!storedCode) return;
           codeRef.current = null;
           console.log("[WA] FINISH timeout — proceeding with code only, server will discover WABA");
-          onSuccess({ code: storedCode, phoneNumberId: "", wabaId: "" });
+          onSuccess({ code: storedCode, phoneNumberId: "", wabaId: "", redirectUri: redirectUriRef.current });
         }, 5000);
       },
       loginOptions,

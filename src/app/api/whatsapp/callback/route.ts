@@ -13,9 +13,10 @@ export async function POST(req: NextRequest) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const body = await req.json() as { code: string; phoneNumberId?: string; wabaId?: string };
+  const body = await req.json() as { code: string; phoneNumberId?: string; wabaId?: string; redirectUri?: string };
   const { code } = body;
   let { phoneNumberId, wabaId } = body;
+  const redirectUri = body.redirectUri ?? "";
 
   if (!code) {
     return Response.json({ error: "Missing required field: code" }, { status: 400 });
@@ -31,8 +32,8 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Exchange code for short-lived token
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const redirectUri = `${appUrl}/api/whatsapp/callback`;
+  // redirectUri must exactly match what was passed to FB.login on the client
+  console.log("[WA] redirect_uri for exchange:", redirectUri);
   const tokenParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, code, redirect_uri: redirectUri });
   console.log("[WA] token params (no secret):", new URLSearchParams({ client_id: appId, code, redirect_uri: redirectUri }).toString());
   const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {

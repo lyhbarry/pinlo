@@ -29,12 +29,12 @@ export default function WhatsAppSettingsPage() {
       .catch(() => setStatus({ connected: false }));
   }, []);
 
-  async function handleSuccess({ code, phoneNumberId, wabaId }: { code: string; phoneNumberId: string; wabaId: string }) {
+  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: { code: string; phoneNumberId: string; wabaId: string; redirectUri: string }) {
     setSubmitting(true);
     const res = await fetch("/api/whatsapp/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId, wabaId }),
+      body: JSON.stringify({ code, phoneNumberId, wabaId, redirectUri }),
     });
     setSubmitting(false);
 
@@ -114,7 +114,7 @@ function StateNotConnected({
   onError,
 }: {
   submitting: boolean;
-  onSuccess: (data: { code: string; phoneNumberId: string; wabaId: string }) => void;
+  onSuccess: (data: { code: string; phoneNumberId: string; wabaId: string; redirectUri: string }) => void;
   onError: (error: string) => void;
 }) {
   return (
