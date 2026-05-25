@@ -3,9 +3,10 @@ import { requireAuth } from "@/lib/session";
 import { db } from "@/lib/db";
 import { registerWebhook } from "@/lib/whatsapp/register-webhook";
 
-const GRAPH = "https://graph.facebook.com/v19.0";
+const GRAPH = "https://graph.facebook.com/v23.0";
 
 export async function POST(req: NextRequest) {
+  console.log("[WA] callback hit");
   const dbUser = await requireAuth();
   if (!dbUser) return new Response("Unauthorized", { status: 401 });
   if (dbUser.role !== "OWNER" && dbUser.role !== "ADMIN") {
@@ -20,27 +21,31 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Missing required field: code" }, { status: 400 });
   }
 
-  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID?.trim();
+  const appSecret = process.env.FACEBOOK_APP_SECRET?.trim();
 
-  console.log("[WA] env | appId:", appId, "| secretLen:", appSecret?.length, "| secretStart:", appSecret?.slice(0, 4));
+  console.log("[WA] env | appId:", appId, "| secretLen:", appSecret?.length, "| secretStart:", appSecret?.slice(0, 6));
 
   if (!appId || !appSecret) {
     return Response.json({ error: "Facebook app not configured on server." }, { status: 500 });
   }
 
   // 1. Exchange code for short-lived token
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const redirectUri = `${appUrl}/api/whatsapp/callback`;
+  const tokenParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, code, redirect_uri: redirectUri });
+  console.log("[WA] token params (no secret):", new URLSearchParams({ client_id: appId, code, redirect_uri: redirectUri }).toString());
   const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: appId, client_secret: appSecret, code }),
+    body: tokenParams,
   });
   const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
   console.log("[WA] token exchange:", JSON.stringify(tokenData));
 
   if (!tokenRes.ok || !tokenData.access_token) {
     const msg = tokenData.error?.message ?? "Failed to exchange authorization code.";
-    return Response.json({ error: msg }, { status: 502 });
+    return Response.json({ error: `Token exchange failed: ${msg}`, detail: tokenData }, { status: 502 });
   }
 
   const shortLivedToken = tokenData.access_token;

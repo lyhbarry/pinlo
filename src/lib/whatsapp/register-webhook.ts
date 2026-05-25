@@ -1,4 +1,4 @@
-const GRAPH = "https://graph.facebook.com/v19.0";
+const GRAPH = "https://graph.facebook.com/v23.0";
 
 export async function registerWebhook({
   wabaId,
