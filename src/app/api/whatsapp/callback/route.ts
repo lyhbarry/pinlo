@@ -81,7 +81,11 @@ export async function POST(req: NextRequest) {
     accessToken = llData.access_token ?? shortLivedToken;
   }
 
-  // 3. Discover WABA and phone number if not provided
+  // 3. Discover all WABAs and phone numbers (always on first step so user can pick)
+  if (!bodyAccessToken) {
+    wabaId = undefined;
+    phoneNumberId = undefined;
+  }
   if (!wabaId || !phoneNumberId) {
     console.log("[WA] discovering WABAs via debug_token");
 

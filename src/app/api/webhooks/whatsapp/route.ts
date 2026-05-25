@@ -2,7 +2,7 @@ import { type NextRequest } from "next/server";
 import { db } from "@/lib/db";
 
 async function verifySignature(rawBody: ArrayBuffer, signatureHeader: string | null): Promise<boolean> {
-  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
   if (!appSecret) return false;
   if (!signatureHeader?.startsWith("sha256=")) return false;
 
