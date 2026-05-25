@@ -28,13 +28,13 @@ export default function OnboardingPage() {
     window.location.href = "/dashboard";
   }
 
-  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: { code: string; phoneNumberId: string; wabaId: string; redirectUri: string }) {
+  async function handleSuccess({ code, phoneNumberId, wabaId }: { code: string; phoneNumberId: string; wabaId: string }) {
     setSubmitting(true);
     setError(null);
     const res = await fetch("/api/whatsapp/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId, wabaId, redirectUri }),
+      body: JSON.stringify({ code, phoneNumberId, wabaId }),
     });
     setSubmitting(false);
     if (res.ok) {

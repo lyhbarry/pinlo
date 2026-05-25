@@ -12,7 +12,6 @@ declare global {
           config_id: string;
           response_type: string;
           override_default_response_type: boolean;
-          fallback_redirect_uri?: string;
           extras?: Record<string, unknown>;
         }
       ) => void;

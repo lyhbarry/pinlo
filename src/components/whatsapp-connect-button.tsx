@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFacebookSDK, type FBLoginResponse } from "@/components/facebook-sdk";
 
-type SuccessData = { code: string; phoneNumberId: string; wabaId: string; redirectUri: string };
+type SuccessData = { code: string; phoneNumberId: string; wabaId: string };
 
 type Props = {
   onSuccess: (data: SuccessData) => void;
@@ -20,17 +20,10 @@ type WAFinishEvent = {
   data: { phone_number_id: string; waba_id: string };
 };
 
-function resolveRedirectUri() {
-  const configured = process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI?.trim();
-  if (configured) return configured;
-  return new URL("/auth/facebook", window.location.origin).toString();
-}
-
 export function WhatsAppConnectButton({ onSuccess, onError, className, label = "Connect WhatsApp Business" }: Props) {
   const sdkReady = useFacebookSDK();
   const [connecting, setConnecting] = useState(false);
   const codeRef = useRef<string | null>(null);
-  const redirectUriRef = useRef<string>("");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configId = process.env.NEXT_PUBLIC_FACEBOOK_CONFIG_ID;
 
@@ -74,7 +67,7 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
       }
 
       codeRef.current = null;
-      onSuccess({ code, phoneNumberId: phoneNumberId ?? "", wabaId: wabaId ?? "", redirectUri: redirectUriRef.current });
+      onSuccess({ code, phoneNumberId: phoneNumberId ?? "", wabaId: wabaId ?? "" });
     }
 
     window.addEventListener("message", handleMessage);
@@ -90,18 +83,11 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
     codeRef.current = null;
     setConnecting(true);
 
-    redirectUriRef.current = resolveRedirectUri();
     const loginOptions = {
       config_id: configId,
       response_type: "code",
       override_default_response_type: true,
-      fallback_redirect_uri: redirectUriRef.current,
-      extras: {
-        setup: {},
-        feature: "whatsapp_embedded_signup",
-        featureType: "whatsapp_business_app_onboarding",
-        sessionInfoVersion: "3",
-      },
+      extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
     };
     console.log("[WA] calling FB.login with:", JSON.stringify(loginOptions));
 
@@ -123,7 +109,7 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
           if (!storedCode) return;
           codeRef.current = null;
           console.log("[WA] FINISH timeout — proceeding with code only, server will discover WABA");
-          onSuccess({ code: storedCode, phoneNumberId: "", wabaId: "", redirectUri: redirectUriRef.current });
+          onSuccess({ code: storedCode, phoneNumberId: "", wabaId: "" });
         }, 5000);
       },
       loginOptions,
