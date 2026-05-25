@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/session";
 import { db } from "@/lib/db";
+import { META_GRAPH_BASE_URL as GRAPH } from "@/lib/meta";
 import { checkLimit, getPlanId, getPlanLimits } from "@/lib/plan";
 
 export async function GET(
@@ -121,7 +122,7 @@ export async function POST(
   const { whatsappPhoneNumberId, whatsappAccessToken } = tenant;
   if (whatsappPhoneNumberId && whatsappAccessToken) {
     try {
-      const waRes = await fetch(`https://graph.facebook.com/v19.0/${whatsappPhoneNumberId}/messages`, {
+      const waRes = await fetch(`${GRAPH}/${whatsappPhoneNumberId}/messages`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${whatsappAccessToken}`,

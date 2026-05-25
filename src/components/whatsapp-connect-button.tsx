@@ -83,14 +83,6 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
     codeRef.current = null;
     setConnecting(true);
 
-    // Intercept window.open to capture the redirect_uri Facebook uses internally
-    const origOpen = window.open.bind(window);
-    window.open = function(...args: Parameters<typeof window.open>) {
-      console.log("[WA] popup URL:", args[0]);
-      window.open = origOpen;
-      return origOpen(...args);
-    };
-
     const loginOptions = {
       config_id: configId,
       response_type: "code",

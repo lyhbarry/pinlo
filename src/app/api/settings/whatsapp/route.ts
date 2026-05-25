@@ -1,8 +1,7 @@
 import { type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/session";
 import { db } from "@/lib/db";
-
-const GRAPH = "https://graph.facebook.com/v19.0";
+import { META_GRAPH_BASE_URL as GRAPH } from "@/lib/meta";
 
 export async function GET() {
   const dbUser = await requireAuth();

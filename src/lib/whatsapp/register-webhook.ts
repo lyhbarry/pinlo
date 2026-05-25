@@ -1,4 +1,4 @@
-const GRAPH = "https://graph.facebook.com/v23.0";
+import { META_GRAPH_BASE_URL as GRAPH } from "@/lib/meta";
 
 export async function registerWebhook({
   wabaId,

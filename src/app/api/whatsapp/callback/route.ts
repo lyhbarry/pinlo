@@ -1,9 +1,8 @@
 import { type NextRequest } from "next/server";
 import { requireAuth } from "@/lib/session";
 import { db } from "@/lib/db";
+import { META_GRAPH_BASE_URL as GRAPH } from "@/lib/meta";
 import { registerWebhook } from "@/lib/whatsapp/register-webhook";
-
-const GRAPH = "https://graph.facebook.com/v23.0";
 
 export async function POST(req: NextRequest) {
   console.log("[WA] callback hit");
@@ -31,7 +30,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Exchange code for short-lived token
-  console.log("[WA] exchanging code (no redirect_uri), client_id:", appId);
+  console.log("[WA] exchanging code, client_id:", appId);
   const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

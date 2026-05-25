@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { META_API_VERSION } from "@/lib/meta";
 
 declare global {
   interface Window {
@@ -38,7 +39,7 @@ export function useFacebookSDK(): boolean {
     }
 
     window.fbAsyncInit = () => {
-      window.FB.init({ appId, cookie: true, xfbml: true, version: "v19.0" });
+      window.FB.init({ appId, cookie: true, xfbml: true, version: META_API_VERSION });
       setReady(true);
     };
 
