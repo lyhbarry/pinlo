@@ -20,6 +20,12 @@ type WAFinishEvent = {
   data: { phone_number_id: string; waba_id: string };
 };
 
+function resolveRedirectUri() {
+  const configured = process.env.NEXT_PUBLIC_FACEBOOK_REDIRECT_URI?.trim();
+  if (configured) return configured;
+  return new URL("/auth/facebook", window.location.origin).toString();
+}
+
 export function WhatsAppConnectButton({ onSuccess, onError, className, label = "Connect WhatsApp Business" }: Props) {
   const sdkReady = useFacebookSDK();
   const [connecting, setConnecting] = useState(false);
@@ -84,12 +90,18 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
     codeRef.current = null;
     setConnecting(true);
 
-    redirectUriRef.current = "";
+    redirectUriRef.current = resolveRedirectUri();
     const loginOptions = {
       config_id: configId,
       response_type: "code",
       override_default_response_type: true,
-      extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+      fallback_redirect_uri: redirectUriRef.current,
+      extras: {
+        setup: {},
+        feature: "whatsapp_embedded_signup",
+        featureType: "whatsapp_business_app_onboarding",
+        sessionInfoVersion: "3",
+      },
     };
     console.log("[WA] calling FB.login with:", JSON.stringify(loginOptions));
 

@@ -12,6 +12,7 @@ declare global {
           config_id: string;
           response_type: string;
           override_default_response_type: boolean;
+          fallback_redirect_uri?: string;
           extras?: Record<string, unknown>;
         }
       ) => void;
@@ -32,7 +33,10 @@ export function useFacebookSDK(): boolean {
 
   useEffect(() => {
     if (!appId) return;
-    if (window.FB) { setReady(true); return; }
+    if (window.FB) {
+      const timeoutId = window.setTimeout(() => setReady(true), 0);
+      return () => window.clearTimeout(timeoutId);
+    }
 
     window.fbAsyncInit = () => {
       window.FB.init({ appId, cookie: true, xfbml: true, version: "v19.0" });

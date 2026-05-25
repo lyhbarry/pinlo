@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as { code: string; phoneNumberId?: string; wabaId?: string; redirectUri?: string };
   const { code } = body;
   let { phoneNumberId, wabaId } = body;
-  const redirectUri = body.redirectUri ?? "";
+  const redirectUri = body.redirectUri?.trim() || new URL("/auth/facebook", req.url).toString();
 
   if (!code) {
     return Response.json({ error: "Missing required field: code" }, { status: 400 });
@@ -32,19 +32,28 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Exchange code for short-lived token
-  // No redirect_uri — FB.login popup mode doesn't register one with the code
-  console.log("[WA] exchanging code (no redirect_uri), client_id:", appId);
-  const tokenParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
+  console.log("[WA] exchanging code | client_id:", appId, "| redirectUri:", redirectUri);
+  const tokenParams = new URLSearchParams({
+    client_id: appId,
+    client_secret: appSecret,
+    code,
+    redirect_uri: redirectUri,
+  });
   const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: tokenParams,
   });
-  const tokenData = await tokenRes.json() as { access_token?: string; error?: { message: string } };
+  const tokenData = await tokenRes.json() as {
+    access_token?: string;
+    error?: { message: string; error_subcode?: number };
+  };
   console.log("[WA] token exchange:", JSON.stringify(tokenData));
 
   if (!tokenRes.ok || !tokenData.access_token) {
-    const msg = tokenData.error?.message ?? "Failed to exchange authorization code.";
+    const msg = tokenData.error?.error_subcode === 36008
+      ? `Redirect URI mismatch. Meta expects the exact same redirect used during login. Current redirect_uri: ${redirectUri}`
+      : tokenData.error?.message ?? "Failed to exchange authorization code.";
     return Response.json({ error: `Token exchange failed: ${msg}`, detail: tokenData }, { status: 502 });
   }
 
