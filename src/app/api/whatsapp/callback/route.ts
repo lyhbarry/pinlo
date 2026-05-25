@@ -32,10 +32,9 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Exchange code for short-lived token
-  // redirectUri must exactly match what was passed to FB.login on the client
-  console.log("[WA] redirect_uri for exchange:", redirectUri);
-  const tokenParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, code, redirect_uri: redirectUri });
-  console.log("[WA] token params (no secret):", new URLSearchParams({ client_id: appId, code, redirect_uri: redirectUri }).toString());
+  // No redirect_uri — FB.login popup mode doesn't register one with the code
+  console.log("[WA] exchanging code (no redirect_uri), client_id:", appId);
+  const tokenParams = new URLSearchParams({ client_id: appId, client_secret: appSecret, code });
   const tokenRes = await fetch(`${GRAPH}/oauth/access_token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

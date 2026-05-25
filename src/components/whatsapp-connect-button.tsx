@@ -84,17 +84,14 @@ export function WhatsAppConnectButton({ onSuccess, onError, className, label = "
     codeRef.current = null;
     setConnecting(true);
 
-    const redirectUri = `${window.location.origin}/api/whatsapp/callback`;
-    redirectUriRef.current = redirectUri;
+    redirectUriRef.current = "";
     const loginOptions = {
       config_id: configId,
       response_type: "code",
       override_default_response_type: true,
-      redirect_uri: redirectUri,
       extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
     };
     console.log("[WA] calling FB.login with:", JSON.stringify(loginOptions));
-    console.log("[WA] redirect_uri for login:", redirectUri);
 
     window.FB.login(
       (res: FBLoginResponse) => {
