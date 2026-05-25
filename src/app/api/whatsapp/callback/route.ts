@@ -109,18 +109,6 @@ export async function POST(req: NextRequest) {
   });
   console.log("[WA] subscribed_apps:", JSON.stringify(await subRes.json()));
 
-  // 5. Register the phone number
-  const registerRes = await fetch(`${GRAPH}/${phoneNumberId}/register`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", pin: "000000" }),
-  });
-  const registerData = await registerRes.json() as { error?: { message: string } };
-  console.log("[WA] register phone:", JSON.stringify(registerData));
-  if (!registerRes.ok && registerData.error) {
-    return Response.json({ error: registerData.error.message }, { status: 502 });
-  }
-
   // 6. Register webhook
   try {
     await registerWebhook({ wabaId, accessToken });
