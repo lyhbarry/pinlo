@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle, Loader2 } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 import { selectTemplate } from "@/app/actions/onboarding";
 import { WhatsAppConnectButton, type WASuccessData } from "@/components/whatsapp-connect-button";
+import type { PhoneOption } from "@/app/api/whatsapp/callback/route";
 
 export default function OnboardingPage() {
+  const router = useRouter();
   const [connected, setConnected] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ options: PhoneOption[]; accessToken: string } | null>(null);
   const provisionRef = useRef<Promise<{ error?: string }> | null>(null);
 
   // Provision generic CRM in background immediately
@@ -21,29 +25,53 @@ export default function OnboardingPage() {
     if (provisionRef.current) {
       const result = await provisionRef.current;
       if (result?.error?.includes("sign up again")) {
-        window.location.href = "/signup";
+        router.push("/signup");
         return;
       }
     }
-    window.location.href = "/dashboard";
+    router.push("/dashboard");
   }
 
-  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: WASuccessData) {
+  async function completeConnection(body: Record<string, string>) {
     setSubmitting(true);
     setError(null);
     const res = await fetch("/api/whatsapp/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId, wabaId, redirectUri }),
+      body: JSON.stringify(body),
     });
-    setSubmitting(false);
-    if (res.ok) {
-      setConnected(true);
-      await proceed();
-    } else {
-      const data = await res.json().catch(() => ({})) as { error?: string };
+    const data = await res.json() as { needsSelection?: boolean; options?: PhoneOption[]; accessToken?: string; error?: string };
+
+    if (!res.ok) {
+      setSubmitting(false);
       setError(data.error ?? "Failed to connect WhatsApp. You can set it up later in Settings.");
+      return;
     }
+
+    if (data.needsSelection && data.options && data.accessToken) {
+      setSubmitting(false);
+      setSelection({ options: data.options, accessToken: data.accessToken });
+      return;
+    }
+
+    setSubmitting(false);
+    setConnected(true);
+    await proceed();
+  }
+
+  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: WASuccessData) {
+    await completeConnection({ code, phoneNumberId, wabaId, redirectUri });
+  }
+
+  async function handleSelect(option: PhoneOption) {
+    if (!selection) return;
+    const token = selection.accessToken;
+    setSelection(null);
+    await completeConnection({
+      accessToken: token,
+      phoneNumberId: option.phoneNumberId,
+      wabaId: option.wabaId,
+    });
   }
 
   function handleError(message: string) {
@@ -97,6 +125,31 @@ export default function OnboardingPage() {
             <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
               Setting up WhatsApp…
+            </div>
+          ) : selection ? (
+            <div className="space-y-3 text-left">
+              <p className="text-sm font-medium text-foreground text-center">Select a phone number</p>
+              <p className="text-xs text-muted-foreground text-center">
+                Multiple numbers found — choose one to connect.
+              </p>
+              {selection.options.map((opt) => (
+                <button
+                  key={opt.phoneNumberId}
+                  onClick={() => handleSelect(opt)}
+                  className="w-full text-left rounded-lg border border-border hover:border-[#25D366] hover:bg-[#25D366]/5 p-4 transition-colors group"
+                >
+                  <p className="font-medium text-foreground text-sm">{opt.displayPhoneNumber}</p>
+                  {opt.verifiedName && (
+                    <p className="text-xs text-muted-foreground mt-0.5">{opt.verifiedName}</p>
+                  )}
+                </button>
+              ))}
+              <button
+                onClick={() => setSelection(null)}
+                className="w-full text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer"
+              >
+                Cancel
+              </button>
             </div>
           ) : (
             <div className="space-y-3">

@@ -7,16 +7,20 @@ import { CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { WhatsAppConnectButton, type WASuccessData } from "@/components/whatsapp-connect-button";
+import type { PhoneOption } from "@/app/api/whatsapp/callback/route";
 
 type Status =
   | { connected: false }
   | { connected: true; phoneNumberId: string; displayPhoneNumber: string | null };
+
+type SelectionState = { options: PhoneOption[]; accessToken: string };
 
 export default function WhatsAppSettingsPage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selection, setSelection] = useState<SelectionState | null>(null);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const webhookUrl = `${appUrl}/api/webhooks/whatsapp`;
@@ -29,27 +33,47 @@ export default function WhatsAppSettingsPage() {
       .catch(() => setStatus({ connected: false }));
   }, []);
 
-  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: WASuccessData) {
+  async function completeConnection(body: Record<string, string>) {
     setSubmitting(true);
     const res = await fetch("/api/whatsapp/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, phoneNumberId, wabaId, redirectUri }),
+      body: JSON.stringify(body),
     });
-    setSubmitting(false);
+    const data = await res.json() as { needsSelection?: boolean; options?: PhoneOption[]; accessToken?: string; phoneNumberId?: string; error?: string };
 
-    if (res.ok) {
-      toast.success("WhatsApp Business connected!");
-      const data = await res.json() as { phoneNumberId: string };
-      setStatus({ connected: true, phoneNumberId: data.phoneNumberId, displayPhoneNumber: null });
-      // Refresh to get display phone number
-      fetch("/api/settings/whatsapp")
-        .then((r) => r.json())
-        .then((d) => setStatus(d as Status));
-    } else {
-      const data = await res.json().catch(() => ({})) as { error?: string };
+    if (!res.ok) {
+      setSubmitting(false);
       toast.error(data.error ?? "Failed to connect WhatsApp. Please try again.");
+      return;
     }
+
+    if (data.needsSelection && data.options && data.accessToken) {
+      setSubmitting(false);
+      setSelection({ options: data.options, accessToken: data.accessToken });
+      return;
+    }
+
+    setSubmitting(false);
+    toast.success("WhatsApp Business connected!");
+    setStatus({ connected: true, phoneNumberId: data.phoneNumberId!, displayPhoneNumber: null });
+    fetch("/api/settings/whatsapp")
+      .then((r) => r.json())
+      .then((d) => setStatus(d as Status));
+  }
+
+  async function handleSuccess({ code, phoneNumberId, wabaId, redirectUri }: WASuccessData) {
+    await completeConnection({ code, phoneNumberId, wabaId, redirectUri });
+  }
+
+  async function handleSelect(option: PhoneOption) {
+    if (!selection) return;
+    setSelection(null);
+    await completeConnection({
+      accessToken: selection.accessToken,
+      phoneNumberId: option.phoneNumberId,
+      wabaId: option.wabaId,
+    });
   }
 
   function handleError(error: string) {
@@ -95,6 +119,12 @@ export default function WhatsAppSettingsPage() {
             disconnecting={disconnecting}
             onDisconnect={handleDisconnect}
             onCopy={copyToClipboard}
+          />
+        ) : selection ? (
+          <StatePicker
+            options={selection.options}
+            onSelect={handleSelect}
+            onCancel={() => setSelection(null)}
           />
         ) : (
           <StateNotConnected
@@ -154,6 +184,59 @@ function StateNotConnected({
       ) : (
         <WhatsAppConnectButton onSuccess={onSuccess} onError={onError} />
       )}
+    </div>
+  );
+}
+
+function StatePicker({
+  options,
+  onSelect,
+  onCancel,
+}: {
+  options: PhoneOption[];
+  onSelect: (option: PhoneOption) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border p-6 space-y-5">
+      <div>
+        <p className="font-semibold text-foreground">Select a phone number</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Multiple WhatsApp numbers were found on your account. Choose the one to connect.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {options.map((opt) => (
+          <button
+            key={opt.phoneNumberId}
+            onClick={() => onSelect(opt)}
+            className="w-full text-left rounded-lg border border-border hover:border-[#25D366] hover:bg-[#25D366]/5 p-4 transition-colors group"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-foreground text-sm">
+                  {opt.displayPhoneNumber}
+                </p>
+                {opt.verifiedName && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{opt.verifiedName}</p>
+                )}
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">ID: {opt.phoneNumberId}</p>
+              </div>
+              <span className="text-xs text-[#25D366] opacity-0 group-hover:opacity-100 transition-opacity">
+                Connect →
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <button
+        onClick={onCancel}
+        className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
