@@ -59,11 +59,19 @@ interface WhatsAppContact {
   wa_id: string;
 }
 
+interface WhatsAppStatus {
+  id: string; // wamid
+  status: "sent" | "delivered" | "read" | "failed";
+  timestamp: string;
+  recipient_id: string;
+}
+
 interface WhatsAppValue {
   messaging_product: string;
   metadata: { phone_number_id: string };
   contacts?: WhatsAppContact[];
   messages?: WhatsAppMessage[];
+  statuses?: WhatsAppStatus[];
 }
 
 interface WhatsAppChange {
@@ -112,6 +120,21 @@ export async function POST(request: NextRequest) {
       const phoneNumberId = value.metadata?.phone_number_id;
       const messages = value.messages ?? [];
       const contacts = value.contacts ?? [];
+
+      // Handle delivery/read status updates
+      const statuses = value.statuses ?? [];
+      for (const s of statuses) {
+        const statusMap: Record<string, string> = {
+          sent: "SENT",
+          delivered: "DELIVERED",
+          read: "READ",
+          failed: "FAILED",
+        };
+        const newStatus = statusMap[s.status];
+        if (newStatus) {
+          await db.from("Message").update({ status: newStatus }).eq("wamid", s.id);
+        }
+      }
 
       if (!messages.length) continue;
 

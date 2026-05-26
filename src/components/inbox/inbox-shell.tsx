@@ -4,15 +4,16 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Search, Circle, Send, CheckCheck, Phone, Tag, MessageCircle, Loader2, Zap, CheckCheck as Done, Lock, ArrowLeft,
+  Search, Circle, Send, Check, CheckCheck, AlertCircle, Phone, Tag, MessageCircle, Loader2, Zap, CheckCheck as Done, Lock, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Contact = { id: string; name: string; phone: string; tags: string[] };
-type Message = { id: string; body: string; direction: string; timestamp: string; status: string };
+type Message = { id: string; body: string; direction: string; timestamp: string; status: string; wamid?: string | null };
 type ConvSummary = {
   id: string; status: string; lastMessageAt: string;
   contact: Contact;
@@ -77,6 +78,7 @@ function InboxShellInner() {
   const [viewedIds, setViewedIds] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [supabase] = useState(() => createClient());
 
   // Load quick replies once
   useEffect(() => {
@@ -84,8 +86,6 @@ function InboxShellInner() {
   }, []);
 
   const pendingConvRef = useRef<string | null>(searchParams.get("conv"));
-
-  const selectedIdRef = useRef<string | null>(null);
 
   const selectConversation = useCallback(async (id: string) => {
     setMobileShowChat(true);
@@ -97,57 +97,67 @@ function InboxShellInner() {
     setLoadingChat(false);
   }, [selected?.id]);
 
-  // Poll conversation list every 5s
-  useEffect(() => {
-    async function fetchConvs() {
-      const r = await fetch("/api/conversations");
-      if (!r.ok) return;
-      const data: ConvSummary[] = await r.json();
-      setConversations(data);
-      setLoadingConvs(false);
-      // Auto-select conversation from ?conv= query param
-      if (pendingConvRef.current) {
-        const convId = pendingConvRef.current;
-        pendingConvRef.current = null;
-        selectConversation(convId);
-        router.replace("/dashboard/inbox");
-      }
+  const fetchConvs = useCallback(async () => {
+    const r = await fetch("/api/conversations");
+    if (!r.ok) return;
+    const data: ConvSummary[] = await r.json();
+    setConversations(data);
+    setLoadingConvs(false);
+    if (pendingConvRef.current) {
+      const convId = pendingConvRef.current;
+      pendingConvRef.current = null;
+      selectConversation(convId);
+      router.replace("/dashboard/inbox");
     }
-    fetchConvs();
-    const id = setInterval(fetchConvs, 5000);
-    return () => clearInterval(id);
   }, [selectConversation, router]);
+
+  // Realtime: Conversation table changes → refresh list
+  // Initial load happens on SUBSCRIBED; re-fetches on any Conversation change
+  useEffect(() => {
+    const channel = supabase
+      .channel("convs-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "Conversation" }, () => fetchConvs())
+      .subscribe((status) => { if (status === "SUBSCRIBED") fetchConvs(); });
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase, fetchConvs]);
 
   // Notify bottom nav to hide/show when entering/leaving a conversation on mobile
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("mobile-chat-change", { detail: { inChat: mobileShowChat } }));
   }, [mobileShowChat]);
 
-  // Poll active conversation messages every 3s
+  // Realtime: Message INSERT + UPDATE for the selected conversation
   useEffect(() => {
-    selectedIdRef.current = selected?.id ?? null;
-  }, [selected?.id]);
-
-  useEffect(() => {
-    const tick = async () => {
-      const id = selectedIdRef.current;
-      if (!id) return;
-      const r = await fetch(`/api/conversations/${id}/messages`);
-      if (!r.ok) return;
-      const data: ConvDetail = await r.json();
-      setSelected((prev) => {
-        if (!prev || prev.id !== id) return prev;
-        // Keep optimistic messages not yet echoed back from the server
-        const serverIds = new Set(data.messages.map((m) => m.id));
-        const pendingOptimistic = prev.messages.filter(
-          (m) => m.id.startsWith("tmp-") && !serverIds.has(m.id)
-        );
-        return { ...data, messages: [...data.messages, ...pendingOptimistic] };
-      });
-    };
-    const intervalId = setInterval(tick, 3000);
-    return () => clearInterval(intervalId);
-  }, []);
+    if (!selected?.id) return;
+    const convId = selected.id;
+    const channel = supabase
+      .channel(`messages-${convId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "Message", filter: `conversationId=eq.${convId}` },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          setSelected((prev) => {
+            if (!prev || prev.id !== convId) return prev;
+            if (prev.messages.some((m) => m.id === newMsg.id)) return prev;
+            return { ...prev, messages: [...prev.messages, newMsg] };
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "Message", filter: `conversationId=eq.${convId}` },
+        (payload) => {
+          const updated = payload.new as Message;
+          setSelected((prev) => {
+            if (!prev || prev.id !== convId) return prev;
+            return { ...prev, messages: prev.messages.map((m) => m.id === updated.id ? updated : m) };
+          });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase, selected?.id]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -440,7 +450,12 @@ function InboxShellInner() {
                           <span className={cn("text-[10px]", isOut ? "text-primary-foreground/70" : "text-muted-foreground")}>
                             {timeLabel(msg.timestamp)}
                           </span>
-                          {isOut && <CheckCheck className="w-3 h-3 text-primary-foreground/70" />}
+                          {isOut && (
+                            msg.status === "READ" ? <CheckCheck className="w-3 h-3 text-blue-400" /> :
+                            msg.status === "DELIVERED" ? <CheckCheck className="w-3 h-3 text-primary-foreground/70" /> :
+                            msg.status === "FAILED" ? <AlertCircle className="w-3 h-3 text-red-400" /> :
+                            <Check className="w-3 h-3 text-primary-foreground/70" />
+                          )}
                         </div>
                       </div>
                     </div>

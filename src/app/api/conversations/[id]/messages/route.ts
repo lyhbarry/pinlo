@@ -135,7 +135,14 @@ export async function POST(
           text: { body },
         }),
       });
-      if (!waRes.ok) {
+      if (waRes.ok) {
+        const waData = await waRes.json() as { messages?: { id: string }[] };
+        const wamid = waData.messages?.[0]?.id;
+        if (wamid && message) {
+          await db.from("Message").update({ wamid }).eq("id", (message as { id: string }).id);
+          return Response.json({ ...(message as object), wamid });
+        }
+      } else {
         const err = await waRes.json().catch(() => ({}));
         console.error("[whatsapp] send failed:", JSON.stringify(err));
       }
