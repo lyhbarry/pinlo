@@ -7,7 +7,6 @@ export type PlanLimits = {
   maxActiveReminders: number;
   canUseTemplates: string[];
   canCustomisePipeline: boolean;
-  canViewAnalytics: boolean;
   canSendMessages: boolean;
   monthlyMessageLimit: number;
 };
@@ -21,7 +20,6 @@ export const PLANS: Record<PlanId, { name: string } & PlanLimits> = {
     maxActiveReminders: 5,
     canUseTemplates: ["generic_crm", "property_agent", "retail_fnb", "contractor_trades"],
     canCustomisePipeline: false,
-    canViewAnalytics: false,
     canSendMessages: true,
     monthlyMessageLimit: 1000,
   },
@@ -33,7 +31,6 @@ export const PLANS: Record<PlanId, { name: string } & PlanLimits> = {
     maxActiveReminders: Infinity,
     canUseTemplates: ["generic_crm", "property_agent", "retail_fnb", "contractor_trades"],
     canCustomisePipeline: true,
-    canViewAnalytics: true,
     canSendMessages: true,
     monthlyMessageLimit: Infinity,
   },
@@ -67,5 +64,4 @@ export const PRO_PLAN_FEATURES = [
   "Unlimited messages",
   "Up to 5 team members",
   "Pipeline customisation",
-  "Analytics",
 ];

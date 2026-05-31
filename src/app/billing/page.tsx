@@ -32,7 +32,6 @@ const ALL_FEATURES = [
   { label: "Pipeline templates", free: true, pro: true },
   { label: "Quick replies", free: true, pro: true },
   { label: "Pipeline customisation", free: false, pro: true },
-  { label: "Analytics", free: false, pro: "Coming soon" },
 ];
 
 export default function BillingPage() {

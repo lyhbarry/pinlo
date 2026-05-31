@@ -148,7 +148,22 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: `Webhook registration failed: ${webhookResult.error}` }, { status: 502 });
   }
 
-  // 5. Persist to DB
+  // 5. Check no other tenant already owns this phone number
+  const { data: existing } = await db
+    .from("Tenant")
+    .select("id")
+    .eq("whatsappPhoneNumberId", phoneNumberId)
+    .neq("id", dbUser.tenantId)
+    .maybeSingle();
+
+  if (existing) {
+    return Response.json(
+      { error: "This WhatsApp number is already connected to another account." },
+      { status: 409 }
+    );
+  }
+
+  // 6. Persist to DB
   await db
     .from("Tenant")
     .update({ whatsappPhoneNumberId: phoneNumberId, whatsappAccessToken: accessToken })
