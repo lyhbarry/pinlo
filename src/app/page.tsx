@@ -52,16 +52,14 @@ export default function HomePage() {
       <section className="max-w-4xl mx-auto px-4 pt-24 pb-20 text-center">
         <div className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-medium px-3 py-1 rounded-full mb-6">
           <Zap className="w-3 h-3" />
-          WhatsApp CRM for growing teams
+          Built for WhatsApp sales teams
         </div>
         <h1 className="text-5xl font-bold text-foreground leading-tight tracking-tight mb-5">
           Manage every customer conversation{" "}
           <span className="text-primary">from one inbox</span>
         </h1>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
-          Pinlo connects to your WhatsApp Business number and gives your whole
-          team a shared inbox, contact records, and a deal pipeline — no
-          spreadsheets, no missed messages.
+          Connect your WhatsApp number, invite your team, and start closing — in minutes.
         </p>
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <Button size="lg" asChild>
@@ -77,6 +75,26 @@ export default function HomePage() {
         <p className="text-xs text-muted-foreground mt-3">
           14-day free trial · No credit card required
         </p>
+
+        {/* Hero screenshot */}
+        <div className="mt-14 mx-auto max-w-5xl">
+          <div className="rounded-xl border border-border shadow-2xl overflow-hidden">
+            {/* Browser chrome */}
+            <div className="flex items-center gap-1.5 px-4 py-3 bg-muted border-b border-border">
+              <span className="w-3 h-3 rounded-full bg-red-400/70" />
+              <span className="w-3 h-3 rounded-full bg-yellow-400/70" />
+              <span className="w-3 h-3 rounded-full bg-green-400/70" />
+              <div className="flex-1 ml-2 h-5 bg-background rounded flex items-center px-3">
+                <span className="text-[11px] text-muted-foreground">app.pinlo.io/dashboard/inbox</span>
+              </div>
+            </div>
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/dashboard-preview.png" alt="Pinlo dashboard preview" className="w-full block" />
+              <div className="absolute bottom-0 inset-x-0 h-32 bg-linear-to-t from-background to-transparent" />
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Features */}
@@ -233,12 +251,9 @@ export default function HomePage() {
       {/* Bottom CTA */}
       <section className="border-t border-border bg-muted/30 py-20">
         <div className="max-w-2xl mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-4">
+          <h2 className="text-3xl font-bold text-foreground mb-8">
             Ready to get started?
           </h2>
-          <p className="text-muted-foreground mb-8">
-            Join teams already using Pinlo to manage their WhatsApp sales.
-          </p>
           <Button size="lg" asChild>
             <Link href="/signup">
               Start free trial
@@ -255,9 +270,10 @@ export default function HomePage() {
             <LogoMark size={20} />
             <span className="font-medium text-foreground">Pinlo</span>
             <span className="text-border">·</span>
-            <span>WhatsApp CRM for growing teams</span>
+            <span>WhatsApp CRM for sales teams</span>
           </div>
           <div className="flex items-center gap-6">
+            <a href="https://wa.me/6580745187" className="hover:text-foreground transition-colors">Contact us</a>
             <Link href="/login" className="hover:text-foreground transition-colors">Sign in</Link>
             <Link href="/signup" className="hover:text-foreground transition-colors">Sign up</Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>

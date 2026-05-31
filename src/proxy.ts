@@ -31,7 +31,7 @@ export async function proxy(request: NextRequest) {
 
   // ── Unauthenticated ───────────────────────────────────────────────────────
   if (!user) {
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding") || pathname.startsWith("/billing")) {
+    if (pathname.startsWith("/dashboard/") || pathname === "/dashboard" || pathname.startsWith("/onboarding") || pathname.startsWith("/billing")) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
     return supabaseResponse;
@@ -46,7 +46,7 @@ export async function proxy(request: NextRequest) {
 
   // ── Onboarding gate ───────────────────────────────────────────────────────
   if (!onboardingComplete) {
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/billing")) {
+    if (pathname.startsWith("/dashboard/") || pathname === "/dashboard" || pathname.startsWith("/billing")) {
       return NextResponse.redirect(new URL("/onboarding", request.url));
     }
     return supabaseResponse;

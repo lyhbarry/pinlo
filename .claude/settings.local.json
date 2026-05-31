@@ -1,6 +1,9 @@
 {
   "permissions": {
     "allow": [
+      "Bash(*)",
+      "Edit(*)",
+      "Write(*)",
       "Bash(npm install *)",
       "Bash(npx shadcn@latest init --yes)",
       "Bash(npx shadcn@latest init)",
@@ -37,7 +40,14 @@
       "Bash(xargs ls -la)",
       "Bash(mkdir -p /Users/lyhbarry/Development/personal/pinlo/src/app/api/team/\\\\[id\\\\] /Users/lyhbarry/Development/personal/pinlo/src/app/api/settings/org /Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/analytics && echo \"dirs created\")",
       "Bash(npm list *)",
-      "Bash(xargs cat)"
+      "Bash(xargs cat)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3333/)",
+      "Bash(cat /tmp/pinlo-dev.log)",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(npx --yes playwright install chromium --with-deps)",
+      "Bash(node -e ' *)",
+      "Bash(osascript)"
     ],
     "additionalDirectories": [
       "/Users/lyhbarry/Development/personal/pinlo/src/app/dashboard/inbox",
