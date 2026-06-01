@@ -273,7 +273,7 @@ export default function HomePage() {
             <span>WhatsApp CRM for sales teams</span>
           </div>
           <div className="flex items-center gap-6">
-            <a href="https://wa.me/6580745187" className="hover:text-foreground transition-colors">Contact us</a>
+            <a href="mailto:hello@pinlo.io" className="hover:text-foreground transition-colors">Contact us</a>
             <Link href="/login" className="hover:text-foreground transition-colors">Sign in</Link>
             <Link href="/signup" className="hover:text-foreground transition-colors">Sign up</Link>
             <Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link>
