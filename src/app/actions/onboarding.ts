@@ -55,5 +55,5 @@ export async function selectTemplate(templateId: string): Promise<{ error?: stri
   // Refresh so the updated user_metadata (onboarding_complete: true) is
   // reflected in the JWT that the middleware will read on the next request.
   await supabase.auth.refreshSession();
-  return { done: true };
+  return {};
 }
