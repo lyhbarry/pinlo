@@ -56,7 +56,7 @@ function WorkspaceCard({ orgName, slug, role }: { orgName: string; slug: string;
     });
     setSaving(false);
     if (res.ok) {
-      toast.success("Organization name updated.");
+      toast.success("Workspace name updated.");
       setEditing(false);
     } else {
       toast.error("Failed to update name.");
@@ -68,7 +68,7 @@ function WorkspaceCard({ orgName, slug, role }: { orgName: string; slug: string;
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div>
           <CardTitle className="text-base">Workspace</CardTitle>
-          <CardDescription>Your organization details</CardDescription>
+          <CardDescription>Your workspace details</CardDescription>
         </div>
         {!editing && (role === "OWNER" || role === "ADMIN") && (
           <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="-mt-1">
@@ -78,7 +78,7 @@ function WorkspaceCard({ orgName, slug, role }: { orgName: string; slug: string;
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex justify-between items-center text-sm gap-4">
-          <span className="text-muted-foreground shrink-0">Organization</span>
+          <span className="text-muted-foreground shrink-0">Workspace name</span>
           {editing ? (
             <div className="flex items-center gap-2 flex-1 justify-end">
               <Input
@@ -109,6 +109,111 @@ function WorkspaceCard({ orgName, slug, role }: { orgName: string; slug: string;
           <span className="text-muted-foreground">Your role</span>
           <span className="font-medium capitalize">{role.toLowerCase()}</span>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+type UserMetadata = Record<string, unknown>;
+
+function ProfileCard({ email }: { email: string }) {
+  const [name, setName] = useState("");
+  const [savedName, setSavedName] = useState("");
+  const [metadata, setMetadata] = useState<UserMetadata>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+
+      const userMetadata = (user?.user_metadata ?? {}) as UserMetadata;
+      const currentName = typeof userMetadata.name === "string" ? userMetadata.name : "";
+
+      setMetadata(userMetadata);
+      setName(currentName);
+      setSavedName(currentName);
+      setLoading(false);
+    }
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function handleSave() {
+    const trimmed = name.trim();
+    if (trimmed === savedName.trim()) return;
+
+    setSaving(true);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        ...metadata,
+        name: trimmed || null,
+      },
+    });
+    setSaving(false);
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    const nextMetadata = (data.user?.user_metadata ?? {
+      ...metadata,
+      name: trimmed || null,
+    }) as UserMetadata;
+    const nextName = typeof nextMetadata.name === "string" ? nextMetadata.name : "";
+
+    setMetadata(nextMetadata);
+    setName(nextName);
+    setSavedName(nextName);
+    toast.success(nextName ? "Profile name updated." : "Profile name cleared.");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Profile</CardTitle>
+        <CardDescription>Optional details for your account</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="profile-email" className="text-xs">Email</Label>
+          <Input
+            id="profile-email"
+            value={email}
+            disabled
+            className="h-8 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="profile-name" className="text-xs">Display name</Label>
+          <Input
+            id="profile-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            placeholder={loading ? "Loading..." : "Add your name"}
+            className="h-8 text-sm"
+            disabled={loading || saving}
+          />
+        </div>
+        <Button
+          size="sm"
+          onClick={handleSave}
+          disabled={loading || saving || name.trim() === savedName.trim()}
+        >
+          {saving && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+          Save profile
+        </Button>
       </CardContent>
     </Card>
   );
@@ -551,6 +656,8 @@ export default function SettingsPage() {
 
       <div className="space-y-4 max-w-2xl">
         <WhatsAppCard phoneNumberId={me.tenant.whatsappPhoneNumberId} />
+
+        <ProfileCard email={me.email} />
 
         <WorkspaceCard orgName={me.tenant.name} slug={me.tenant.slug} role={me.role} />
 

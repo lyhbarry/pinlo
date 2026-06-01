@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,10 @@ import {
 import { Loader2 } from "lucide-react";
 import { LogoMark } from "@/components/logo";
 
-export default function SetPasswordPage() {
+function SetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isReset = searchParams.get("mode") === "reset";
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -82,9 +84,13 @@ export default function SetPasswordPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Set your password</CardTitle>
+            <CardTitle className="text-2xl">
+              {isReset ? "Choose a new password" : "Set your password"}
+            </CardTitle>
             <CardDescription>
-              You&apos;ve been invited to a workspace. Create a password to continue.
+              {isReset
+                ? "Enter a new password for your account."
+                : "You've been invited to a workspace. Create a password to continue."}
             </CardDescription>
           </CardHeader>
 
@@ -125,12 +131,20 @@ export default function SetPasswordPage() {
             <CardFooter className="mt-2">
               <Button type="submit" className="w-full" disabled={saving || !password || !confirm}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {saving ? "Setting up…" : "Continue to workspace"}
+                {saving ? "Saving…" : isReset ? "Update password" : "Continue to workspace"}
               </Button>
             </CardFooter>
           </form>
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="h-80 w-full max-w-md bg-muted rounded-xl animate-pulse" /></div>}>
+      <SetPasswordForm />
+    </Suspense>
   );
 }

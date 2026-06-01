@@ -12,6 +12,14 @@ export default function AuthConfirm() {
   useEffect(() => {
     const supabase = createClient();
     const next = searchParams.get("next") ?? "/dashboard";
+    const code = searchParams.get("code");
+    const tokenHash = searchParams.get("token_hash");
+    const type = searchParams.get("type");
+
+    if (code || (tokenHash && type)) {
+      window.location.replace(`/auth/callback${window.location.search}`);
+      return;
+    }
 
     // Parse tokens from the URL hash (#access_token=...&refresh_token=...&type=invite)
     const hash = window.location.hash.substring(1);
@@ -20,9 +28,11 @@ export default function AuthConfirm() {
     const refresh_token = params.get("refresh_token");
 
     if (access_token && refresh_token) {
+      const type = params.get("type");
       supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
         if (!error) {
-          router.replace(next);
+          // Password recovery always goes to set-password regardless of next param
+          router.replace(type === "recovery" ? "/set-password?mode=reset" : next);
         } else {
           router.replace("/login?error=invite_expired");
         }

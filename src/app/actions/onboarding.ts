@@ -6,20 +6,19 @@ import { TEMPLATES, type TemplateId } from "@/lib/templates";
 
 export async function selectTemplate(templateId: string): Promise<{ error?: string }> {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return { error: "Not authenticated" };
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) return { error: "Not authenticated" };
 
   const { data: dbUser } = await db
     .from("User")
     .select("id, tenantId")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   if (!dbUser) {
-    // Auth user exists but public.User was never created — corrupted signup.
-    // Sign them out so they can sign up again cleanly.
+    // Auth user exists but DB User row was never created — corrupted signup.
     await supabase.auth.signOut();
-    return { error: "Account setup is incomplete. Please sign up again." };
+    return { error: "incomplete_setup" };
   }
 
   const tenantId = (dbUser as { tenantId: string }).tenantId;
@@ -53,6 +52,8 @@ export async function selectTemplate(templateId: string): Promise<{ error?: stri
   });
   if (updateErr) return { error: updateErr.message };
 
+  // Refresh so the updated user_metadata (onboarding_complete: true) is
+  // reflected in the JWT that the middleware will read on the next request.
   await supabase.auth.refreshSession();
-  return {};
+  return { done: true };
 }

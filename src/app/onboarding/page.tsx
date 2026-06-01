@@ -24,8 +24,8 @@ export default function OnboardingPage() {
   async function proceed() {
     if (provisionRef.current) {
       const result = await provisionRef.current;
-      if (result?.error?.includes("sign up again")) {
-        router.push("/signup");
+      if (result?.error === "incomplete_setup" || result?.error === "Not authenticated") {
+        router.push("/login?error=setup_incomplete");
         return;
       }
     }

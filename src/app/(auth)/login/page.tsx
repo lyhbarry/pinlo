@@ -19,6 +19,7 @@ import { LogoMark } from "@/components/logo";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invite_expired: "This invite link has expired or is invalid. Please ask your admin to resend it.",
+  setup_incomplete: "Your account setup didn't complete. Please delete your account from Supabase and sign up again, or contact support.",
 };
 
 function LoginForm() {
@@ -56,7 +57,12 @@ function LoginForm() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                Forgot password?
+              </Link>
+            </div>
             <Input
               id="password"
               name="password"
