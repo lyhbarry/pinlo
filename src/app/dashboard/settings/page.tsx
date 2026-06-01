@@ -214,7 +214,7 @@ function TeamCard({ currentUserId, currentUserRole, isPro }: {
         {!isPro && (
           <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
             <Lock className="w-3.5 h-3.5 shrink-0" />
-            <span>Free plan includes up to 5 members. <button onClick={() => { window.location.href = "/billing"; }} className="font-medium text-foreground underline underline-offset-2">Upgrade to Pro</button> for unlimited.</span>
+            <span>Free plan includes up to 2 members. <button onClick={() => { window.location.href = "/billing"; }} className="font-medium text-foreground underline underline-offset-2">Upgrade to Pro</button> for unlimited.</span>
           </div>
         )}
 

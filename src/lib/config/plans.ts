@@ -15,7 +15,7 @@ export const PLANS: Record<PlanId, { name: string } & PlanLimits> = {
   free: {
     name: "Free",
     maxContacts: 50,
-    maxUsers: 5,
+    maxUsers: 2,
     maxQuickReplies: Infinity,
     maxActiveReminders: 5,
     canUseTemplates: ["generic_crm", "property_agent", "retail_fnb", "contractor_trades"],
@@ -38,15 +38,15 @@ export const PLANS: Record<PlanId, { name: string } & PlanLimits> = {
 
 export const PRICING = {
   monthly: {
-    amount: 1000,
+    amount: 2000,
     currency: "SGD",
-    label: "S$10/mo",
+    label: "S$20/mo",
     priceEnvKey: "STRIPE_PRICE_ID_MONTHLY",
   },
   annual: {
-    amount: 9600,
+    amount: 20000,
     currency: "SGD",
-    label: "S$96/yr",
+    label: "S$200/yr",
     priceEnvKey: "STRIPE_PRICE_ID_ANNUAL",
   },
 };
@@ -56,7 +56,7 @@ export const FREE_PLAN_FEATURES = [
   "1,000 messages / month",
   "Quick replies",
   "All pipeline templates",
-  "Up to 5 users",
+  "Up to 2 users",
 ];
 
 export const PRO_PLAN_FEATURES = [

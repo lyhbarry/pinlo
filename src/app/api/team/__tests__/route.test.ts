@@ -112,13 +112,13 @@ describe("POST /api/team — invite teammate", () => {
 
   it("returns 403 with USER_LIMIT_REACHED code when free plan is full", async () => {
     vi.mocked(requireAuth).mockResolvedValue(ownerUser() as any);
-    mockCheckLimit.mockResolvedValue({ allowed: false, current: 5, limit: 5 });
+    mockCheckLimit.mockResolvedValue({ allowed: false, current: 2, limit: 2 });
 
     const res = await POST(makeRequest({ email: "extra@example.com" }));
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.code).toBe("USER_LIMIT_REACHED");
-    expect(body.error).toMatch(/5-member limit/i);
+    expect(body.error).toMatch(/2-member limit/i);
   });
 
   it("passes when pro plan has no user limit", async () => {
