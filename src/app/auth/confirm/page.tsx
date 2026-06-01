@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Handles hash-based auth redirects from Supabase email links (invite, recovery, magic link).
  *
