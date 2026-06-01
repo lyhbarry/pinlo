@@ -91,10 +91,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
-          <div className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <LogoMark size={32} />
             <span className="text-xl font-bold text-foreground">Pinlo</span>
-          </div>
+          </Link>
         </div>
 
         <Suspense fallback={<div className="h-80 bg-muted rounded-xl animate-pulse" />}>

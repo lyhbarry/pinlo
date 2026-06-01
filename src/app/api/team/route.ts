@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
     email.trim().toLowerCase(),
     {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/set-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm?next=/set-password`,
       data: { onboarding_complete: true },
     }
   );

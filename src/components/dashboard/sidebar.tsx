@@ -50,7 +50,7 @@ export function Sidebar({ userEmail, orgName }: SidebarProps) {
   const NavContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-5 flex items-center gap-2">
+      <Link href="/dashboard" className="px-4 py-5 flex items-center gap-2">
         <LogoMark size={32} className="shrink-0" />
         <div className="min-w-0">
           <p className="font-semibold text-foreground text-sm truncate">Pinlo</p>
@@ -58,7 +58,7 @@ export function Sidebar({ userEmail, orgName }: SidebarProps) {
             <p className="text-xs text-muted-foreground truncate">{orgName}</p>
           )}
         </div>
-      </div>
+      </Link>
 
       <Separator />
 
