@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (!limit.allowed) {
     return Response.json(
       {
-        error: `You've reached the ${limit.limit}-member limit on your plan. Upgrade to Pro for up to 5 team members.`,
+        error: `You've reached the ${limit.limit}-member limit on the free plan. Upgrade to Pro for unlimited team members.`,
         code: "USER_LIMIT_REACHED",
       },
       { status: 403 }

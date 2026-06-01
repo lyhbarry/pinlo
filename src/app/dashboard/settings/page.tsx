@@ -204,15 +204,7 @@ function TeamCard({ currentUserId, currentUserRole, isPro }: {
             variant="ghost"
             size="sm"
             className="-mt-1"
-            onClick={() => {
-              if (!isPro) {
-                toast.error("Upgrade to Pro to invite team members.", {
-                  action: { label: "Upgrade", onClick: () => { window.location.href = "/billing"; } },
-                });
-                return;
-              }
-              setShowInvite(true);
-            }}
+            onClick={() => { setShowInvite(true); }}
           >
             <UserPlus className="w-3.5 h-3.5 mr-1.5" />Invite
           </Button>
@@ -222,7 +214,7 @@ function TeamCard({ currentUserId, currentUserRole, isPro }: {
         {!isPro && (
           <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
             <Lock className="w-3.5 h-3.5 shrink-0" />
-            <span>Team collaboration is a <button onClick={() => { window.location.href = "/billing"; }} className="font-medium text-foreground underline underline-offset-2">Pro feature</button>. Upgrade to invite up to 5 members.</span>
+            <span>Free plan includes up to 5 members. <button onClick={() => { window.location.href = "/billing"; }} className="font-medium text-foreground underline underline-offset-2">Upgrade to Pro</button> for unlimited.</span>
           </div>
         )}
 
