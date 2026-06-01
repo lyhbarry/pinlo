@@ -20,8 +20,8 @@ function formatPrice(amount: number) {
 }
 
 const monthlyPrice = formatPrice(PRICING.monthly.amount);
-const annualMonthly = formatPrice(Math.round(PRICING.annual.amount / 12));
 const annualTotal = formatPrice(PRICING.annual.amount);
+const annualSavings = formatPrice(PRICING.monthly.amount * 12 - PRICING.annual.amount);
 
 export default function HomePage() {
   return (
@@ -191,9 +191,9 @@ export default function HomePage() {
             Start free. Upgrade when you need more.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Free */}
-          <div className="rounded-2xl border border-border bg-card p-8">
+          <div className="rounded-2xl border border-border bg-card p-8 flex flex-col">
             <p className="text-sm font-medium text-muted-foreground mb-1">Free</p>
             <div className="flex items-baseline gap-1 mb-1">
               <span className="text-4xl font-bold text-foreground">S$0</span>
@@ -202,7 +202,7 @@ export default function HomePage() {
             <p className="text-sm text-muted-foreground mb-6">
               Perfect for solo operators getting started.
             </p>
-            <ul className="space-y-2.5 mb-8">
+            <ul className="space-y-2.5 mb-8 flex-1">
               {FREE_PLAN_FEATURES.map((f) => (
                 <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Check className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -213,24 +213,53 @@ export default function HomePage() {
             <Button className="w-full" variant="outline" asChild>
               <Link href="/signup">Get started free</Link>
             </Button>
+            <p className="text-center text-xs text-muted-foreground mt-2 invisible">
+              No credit card required
+            </p>
           </div>
 
-          {/* Pro */}
-          <div className="rounded-2xl border-2 border-primary bg-card p-8 relative">
-            <div className="absolute -top-3 left-6">
-              <span className="bg-primary text-primary-foreground text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide">
-                Most Popular
-              </span>
-            </div>
+          {/* Pro Monthly */}
+          <div className="rounded-2xl border border-border bg-card p-8 flex flex-col">
             <p className="text-sm font-medium text-muted-foreground mb-1">Pro</p>
             <div className="flex items-baseline gap-1 mb-1">
-              <span className="text-4xl font-bold text-foreground">{annualMonthly}</span>
+              <span className="text-4xl font-bold text-foreground">{monthlyPrice}</span>
               <span className="text-muted-foreground text-sm">/ mo</span>
             </div>
             <p className="text-sm text-muted-foreground mb-6">
-              Billed {annualTotal} / year · or {monthlyPrice} monthly
+              Billed monthly. Cancel any time.
             </p>
-            <ul className="space-y-2.5 mb-8">
+            <ul className="space-y-2.5 mb-8 flex-1">
+              {PRO_PLAN_FEATURES.map((f) => (
+                <li key={f} className="flex items-center gap-2 text-sm text-foreground">
+                  <Check className="w-4 h-4 text-primary shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <Button className="w-full" variant="outline" asChild>
+              <Link href="/signup">Start 14-day free trial</Link>
+            </Button>
+            <p className="text-center text-xs text-muted-foreground mt-2">
+              No credit card required
+            </p>
+          </div>
+
+          {/* Pro Annual */}
+          <div className="rounded-2xl border-2 border-primary bg-card p-8 relative flex flex-col">
+            <div className="absolute -top-3 left-6">
+              <span className="bg-primary text-primary-foreground text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide">
+                Best Value
+              </span>
+            </div>
+            <p className="text-sm font-medium text-muted-foreground mb-1">Pro · Annual</p>
+            <div className="flex items-baseline gap-1 mb-1">
+              <span className="text-4xl font-bold text-foreground">{annualTotal}</span>
+              <span className="text-muted-foreground text-sm">/ yr</span>
+            </div>
+            <p className="text-sm text-muted-foreground mb-6">
+              Save {annualSavings} compared to monthly — 2 months free.
+            </p>
+            <ul className="space-y-2.5 mb-8 flex-1">
               {PRO_PLAN_FEATURES.map((f) => (
                 <li key={f} className="flex items-center gap-2 text-sm text-foreground">
                   <Check className="w-4 h-4 text-primary shrink-0" />

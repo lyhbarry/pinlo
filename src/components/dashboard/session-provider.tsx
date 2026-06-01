@@ -28,7 +28,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
 
   const refreshMe = useCallback(async () => {
-    const data = await fetch("/api/me").then((r) => r.json());
+    const res = await fetch("/api/me");
+    if (!res.ok) return;
+    const data = await res.json();
     setMe(data);
   }, []);
 

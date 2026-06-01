@@ -7,10 +7,10 @@ import { LogoMark } from "@/components/logo";
 
 export default function Error({
   error,
-  unstable_retry,
+  reset,
 }: {
   error: Error & { digest?: string };
-  unstable_retry: () => void;
+  reset: () => void;
 }) {
   useEffect(() => {
     console.error(error);
@@ -43,7 +43,7 @@ export default function Error({
             </p>
           )}
           <div className="flex items-center justify-center gap-3">
-            <Button onClick={unstable_retry}>Try again</Button>
+            <Button onClick={reset}>Try again</Button>
             <Button variant="outline" asChild>
               <Link href="/dashboard">Go to dashboard</Link>
             </Button>
